@@ -1,0 +1,17 @@
+{# app/templates/404.html #}
+{% extends "base.html" %}
+
+{% block title %}Страница не найдена{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <h1>404 — Страница не найдена</h1>
+    <p class="lead">
+      Такой страницы нет или она была удалена.
+    </p>
+    <div class="row">
+      <a class="btn btn-primary" href="{{ url_for('main.index') }}">На главную</a>
+      <a class="btn" href="{{ url_for('main.catalog') }}">Перейти в каталог</a>
+    </div>
+  </div>
+{% endblock %}
