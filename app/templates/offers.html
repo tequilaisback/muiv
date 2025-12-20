@@ -1,0 +1,56 @@
+{# app/templates/offers.html #}
+{% extends "base.html" %}
+
+{% block title %}Акции{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <div class="row">
+      <h1 style="margin:0;">Акции</h1>
+      <div class="right row">
+        <a class="btn btn-small" href="{{ url_for('main.catalog') }}">В каталог</a>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:10px;">
+      Товары со скидками. Скидка рассчитывается автоматически и отображается в карточке.
+    </p>
+  </div>
+
+  {% if products %}
+    <div class="grid" style="margin-top:14px;">
+      {% for p in products %}
+        <a class="product-card" href="{{ url_for('main.product_detail', product_id=p.id) }}">
+          <div class="product-thumb">
+            <span class="badge badge-sale">-{{ p.discount_percent }}%</span>
+            <div class="product-meta" style="padding:0 12px;text-align:center;">
+              Акция действует при наличии товара на витрине (учебный пример)
+            </div>
+          </div>
+
+          <div class="product-body">
+            <p class="product-title">{{ p.name }}</p>
+            <p class="product-meta">Категория: {{ p.category.name if p.category else "-" }}</p>
+
+            <div class="price">
+              <span class="price-now">{{ "%.2f"|format(p.final_price) }} ₽</span>
+              <span class="price-old">{{ "%.2f"|format(p.price_value) }} ₽</span>
+            </div>
+
+            <div class="row">
+              <span class="btn btn-small">Открыть</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card section">
+      <p class="lead" style="margin:0;">Скидок пока нет. Добавьте скидку у товара в админ-панели.</p>
+      <div class="row" style="margin-top:12px;">
+        <a class="btn btn-primary" href="{{ url_for('admin.products_list') }}">Открыть админку</a>
+        <a class="btn" href="{{ url_for('main.catalog') }}">Каталог</a>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
