@@ -1,0 +1,14 @@
+{# app/templates/partials/_flash.html #}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-wrap" role="status" aria-live="polite">
+      {% for category, message in messages %}
+        {# category: success / warning / danger / info #}
+        <div class="flash {{ category|e }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
