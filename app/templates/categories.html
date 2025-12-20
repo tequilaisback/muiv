@@ -1,0 +1,78 @@
+{# app/templates/categories.html #}
+{% extends "base.html" %}
+
+{% block title %}Категории{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <div class="row">
+      <h1 style="margin:0;">Категории</h1>
+      <div class="right row">
+        <a class="btn btn-small" href="{{ url_for('main.catalog') }}">Открыть каталог</a>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:10px;">
+      Список активных категорий. Нажмите на категорию, чтобы перейти к фильтру в каталоге.
+    </p>
+  </div>
+
+  {% if categories %}
+    <div class="grid" style="margin-top:14px;">
+      {% for c in categories %}
+        {% set base = 'img/categories/cat_' ~ c.id %}
+        <a class="product-card" href="{{ url_for('main.catalog', category_id=c.id) }}">
+          <div class="product-thumb">
+            <span class="badge">категория</span>
+
+            {# Пытаемся найти cat_ID.* без БД: jpg -> jpeg -> png -> webp -> gif #}
+            <img
+              src="{{ url_for('static', filename=base ~ '.jpg') }}"
+              alt="{{ c.name }}"
+              loading="lazy"
+              style="width:100%;height:100%;object-fit:cover;display:block;"
+              onerror="
+                if(!this.dataset.try){ this.dataset.try='1'; this.src='{{ url_for('static', filename=base ~ '.jpeg') }}'; }
+                else if(this.dataset.try==='1'){ this.dataset.try='2'; this.src='{{ url_for('static', filename=base ~ '.png') }}'; }
+                else if(this.dataset.try==='2'){ this.dataset.try='3'; this.src='{{ url_for('static', filename=base ~ '.webp') }}'; }
+                else if(this.dataset.try==='3'){ this.dataset.try='4'; this.src='{{ url_for('static', filename=base ~ '.gif') }}'; }
+                else { this.onerror=null; this.style.display='none'; this.parentElement.querySelector('.no-img').style.display='grid'; }
+              "
+            >
+
+            <div class="product-meta no-img" style="display:none;padding:0 12px;text-align:center;">
+              Нет изображения
+            </div>
+          </div>
+
+          <div class="product-body">
+            <p class="product-title">{{ c.name }}</p>
+
+            <p class="product-meta">
+              {% if c.description %}
+                {{ c.description }}
+              {% else %}
+                Без описания
+              {% endif %}
+            </p>
+
+            <p class="product-meta">
+              Товаров: <b>{{ counts.get(c.id, 0) }}</b>
+            </p>
+
+            <div class="row">
+              <span class="btn btn-small">Открыть</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card section">
+      <p class="lead" style="margin:0;">Категории пока не добавлены.</p>
+      <div class="row" style="margin-top:12px;">
+        <a class="btn btn-primary" href="{{ url_for('main.index') }}">На главную</a>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
