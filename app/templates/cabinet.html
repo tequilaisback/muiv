@@ -1,0 +1,84 @@
+{# app/templates/cabinet.html #}
+{% extends "base.html" %}
+
+{% block title %}Личный кабинет{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <div class="row">
+      <h1 style="margin:0;">Личный кабинет</h1>
+      <div class="right row">
+        <a class="btn btn-small" href="{{ url_for('cabinet.dashboard') }}">Главная</a>
+        <a class="btn btn-small" href="{{ url_for('cabinet.profile') }}">Профиль</a>
+        {% if current_user and current_user.role in ['admin','manager'] %}
+          <a class="btn btn-small" href="{{ url_for('admin.dashboard') }}">Админка</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:10px;">
+      {% if user %}
+        {{ user.full_name }} · роль: <b>{{ role_label }}</b> · логин: <b>{{ user.login }}</b>
+      {% endif %}
+    </p>
+  </div>
+
+  {% if section == "dashboard" %}
+    <div class="card section">
+      <h2>Быстрые действия</h2>
+      <div class="row">
+        <a class="btn btn-primary" href="{{ url_for('main.catalog') }}">Каталог</a>
+        <a class="btn" href="{{ url_for('main.offers') }}">Акции</a>
+        <a class="btn" href="{{ url_for('feedback.form') }}">Обратная связь</a>
+        <a class="btn" href="{{ url_for('cabinet.profile') }}">Настройки профиля</a>
+      </div>
+
+      <hr class="sep">
+
+      <h3>Справка</h3>
+      <p class="lead" style="margin:0;">
+        В личном кабинете можно изменить ФИО и пароль. Для роли <b>Менеджер</b> и <b>Администратор</b>
+        доступна админ-панель для управления данными портала.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if section == "profile" %}
+    <div class="card section">
+      <h2>Профиль</h2>
+
+      <form method="post" action="{{ url_for('cabinet.profile_post') }}" class="form-grid">
+        <div>
+          <label>Логин</label>
+          <input class="input" value="{{ user.login }}" disabled>
+        </div>
+
+        <div>
+          <label>Роль</label>
+          <input class="input" value="{{ role_label }}" disabled>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label>ФИО</label>
+          <input class="input" name="full_name" value="{{ user.full_name }}" required>
+        </div>
+
+        <div>
+          <label>Новый пароль</label>
+          <input class="input" name="new_password" type="password" placeholder="оставьте пустым, если не менять">
+        </div>
+
+        <div>
+          <label>Повтор нового пароля</label>
+          <input class="input" name="new_password2" type="password" placeholder="повторите пароль">
+        </div>
+
+        <div class="row" style="grid-column:1/-1;">
+          <button class="btn btn-success" type="submit">Сохранить</button>
+          <a class="btn" href="{{ url_for('cabinet.dashboard') }}">Назад</a>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+
+{% endblock %}
