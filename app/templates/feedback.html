@@ -1,0 +1,47 @@
+{# app/templates/feedback.html #}
+{% extends "base.html" %}
+
+{% block title %}Обратная связь{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <h1>Обратная связь</h1>
+    <p class="lead">
+      Заполните форму — сообщение сохранится в базе данных и будет доступно в админ-панели.
+    </p>
+
+    <form method="post" action="{{ url_for('feedback.form_post') }}" class="form-grid">
+      <div>
+        <label>Имя</label>
+        <input class="input" name="name" value="{{ current_user.full_name if current_user else '' }}" required>
+      </div>
+
+      <div>
+        <label>Email</label>
+        <input class="input" name="email" type="email" placeholder="name@example.com" required>
+      </div>
+
+      <div style="grid-column:1/-1;">
+        <label>Тема</label>
+        <input class="input" name="subject" placeholder="О чём ваш вопрос?" required>
+      </div>
+
+      <div style="grid-column:1/-1;">
+        <label>Сообщение</label>
+        <textarea class="input" name="message" placeholder="Опишите проблему или предложение..." required></textarea>
+      </div>
+
+      <div class="row" style="grid-column:1/-1;">
+        <button class="btn btn-primary" type="submit">Отправить</button>
+        <a class="btn" href="{{ url_for('main.index') }}">На главную</a>
+      </div>
+    </form>
+
+    {% if current_user %}
+      <hr class="sep">
+      <p class="product-meta" style="margin:0;">
+        Вы вошли как <b>{{ current_user.login }}</b>. Сообщение будет привязано к вашему аккаунту.
+      </p>
+    {% endif %}
+  </div>
+{% endblock %}
