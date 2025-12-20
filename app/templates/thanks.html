@@ -1,0 +1,19 @@
+{# app/templates/thanks.html #}
+{% extends "base.html" %}
+
+{% block title %}Спасибо{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <h1>Спасибо!</h1>
+    <p class="lead">
+      Ваше сообщение принято и сохранено в системе. Мы рассмотрим его в ближайшее время.
+    </p>
+
+    <div class="row">
+      <a class="btn btn-primary" href="{{ url_for('main.index') }}">На главную</a>
+      <a class="btn" href="{{ url_for('main.catalog') }}">В каталог</a>
+      <a class="btn" href="{{ url_for('feedback.form') }}">Отправить ещё</a>
+    </div>
+  </div>
+{% endblock %}
