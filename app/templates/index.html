@@ -1,0 +1,187 @@
+{# app/templates/index.html #}
+{% extends "base.html" %}
+
+{% block title %}Главная{% endblock %}
+
+{% block content %}
+  <div class="card section">
+    <div class="row">
+      <h1 style="margin:0;">Flask Portal</h1>
+      <div class="right row">
+        <a class="btn btn-small" href="{{ url_for('main.catalog') }}">Каталог</a>
+        <a class="btn btn-small" href="{{ url_for('main.offers') }}">Акции</a>
+        <a class="btn btn-small" href="{{ url_for('feedback.form') }}">Обратная связь</a>
+      </div>
+    </div>
+
+    <p class="lead" style="margin-top:10px;">
+      Учебный веб-портал на <b>Python (Flask)</b> и <b>SQLite</b>: каталог, категории, скидки, поиск,
+      личный кабинет и админ-панель.
+    </p>
+
+    <div class="row">
+      {% if current_user %}
+        <span class="badge" style="position:static;">
+          Вы вошли как: {{ current_user.login }} ({{ current_user.role }})
+        </span>
+        <a class="btn btn-primary" href="{{ url_for('cabinet.dashboard') }}">Открыть личный кабинет</a>
+        {% if current_user.role in ['admin','manager'] %}
+          <a class="btn" href="{{ url_for('admin.dashboard') }}">Перейти в админку</a>
+        {% endif %}
+      {% else %}
+        <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Войти</a>
+        <a class="btn" href="{{ url_for('auth.register') }}">Регистрация</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if featured %}
+    <div class="card section">
+      <div class="row">
+        <h2 style="margin:0;">Рекомендуем</h2>
+        <div class="right row">
+          <a class="btn btn-small" href="{{ url_for('main.catalog') }}">Смотреть всё</a>
+        </div>
+      </div>
+      <p class="product-meta" style="margin:8px 0 0;">
+        Товары, отмеченные как <b>featured</b> (можно включать в админке).
+      </p>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      {% for p in featured %}
+        <a class="product-card" href="{{ url_for('main.product_detail', product_id=p.id) }}">
+          <div class="product-thumb">
+            {% if p.discount_percent and p.discount_percent > 0 %}
+              <span class="badge badge-sale">-{{ p.discount_percent }}%</span>
+            {% else %}
+              <span class="badge">featured</span>
+            {% endif %}
+
+            {% if p.image_filename %}
+              <img
+                src="{{ url_for('static', filename='img/products/' ~ p.image_filename) }}"
+                alt="{{ p.name }}"
+                style="width:100%;height:100%;object-fit:cover;display:block;"
+              >
+            {% else %}
+              <div class="product-meta" style="padding:0 12px;text-align:center;">
+                Нет изображения
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="product-body">
+            <p class="product-title">{{ p.name }}</p>
+            <p class="product-meta">Категория: {{ p.category.name if p.category else "-" }}</p>
+
+            <div class="price">
+              {% if p.discount_percent and p.discount_percent > 0 %}
+                <span class="price-now">{{ "%.2f"|format(p.final_price) }} ₽</span>
+                <span class="price-old">{{ "%.2f"|format(p.price_value) }} ₽</span>
+              {% else %}
+                <span class="price-now">{{ "%.2f"|format(p.price_value) }} ₽</span>
+              {% endif %}
+            </div>
+
+            <div class="row">
+              <span class="btn btn-small">Открыть</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card section">
+      <h2>Рекомендуем</h2>
+      <p class="lead" style="margin:0;">
+        Пока нет товаров для витрины. Добавьте товары или отметьте их как <b>featured</b> в админке.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if offers %}
+    <div class="card section">
+      <div class="row">
+        <h2 style="margin:0;">Акции и скидки</h2>
+        <div class="right row">
+          <a class="btn btn-small" href="{{ url_for('main.offers') }}">Все акции</a>
+        </div>
+      </div>
+      <p class="product-meta" style="margin:8px 0 0;">
+        Подборка товаров со скидкой.
+      </p>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      {% for p in offers %}
+        <a class="product-card" href="{{ url_for('main.product_detail', product_id=p.id) }}">
+          <div class="product-thumb">
+            <span class="badge badge-sale">-{{ p.discount_percent }}%</span>
+
+            {% if p.image_filename %}
+              <img
+                src="{{ url_for('static', filename='img/products/' ~ p.image_filename) }}"
+                alt="{{ p.name }}"
+                style="width:100%;height:100%;object-fit:cover;display:block;"
+              >
+            {% else %}
+              <div class="product-meta" style="padding:0 12px;text-align:center;">
+                Нет изображения
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="product-body">
+            <p class="product-title">{{ p.name }}</p>
+            <p class="product-meta">Категория: {{ p.category.name if p.category else "-" }}</p>
+
+            <div class="price">
+              <span class="price-now">{{ "%.2f"|format(p.final_price) }} ₽</span>
+              <span class="price-old">{{ "%.2f"|format(p.price_value) }} ₽</span>
+            </div>
+
+            <div class="row">
+              <span class="btn btn-small">Открыть</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if categories %}
+    <div class="card section">
+      <div class="row">
+        <h2 style="margin:0;">Категории</h2>
+        <div class="right row">
+          <a class="btn btn-small" href="{{ url_for('main.categories') }}">Все категории</a>
+        </div>
+      </div>
+      <p class="product-meta" style="margin:8px 0 0;">
+        Быстрый переход по категориям.
+      </p>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      {% for c in categories %}
+        <a class="product-card" href="{{ url_for('main.catalog', category_id=c.id) }}">
+          <div class="product-thumb">
+            <span class="badge">категория</span>
+            <div class="product-meta" style="padding:0 12px;text-align:center;">
+              {{ c.description if c.description else "Без описания" }}
+            </div>
+          </div>
+
+          <div class="product-body">
+            <p class="product-title">{{ c.name }}</p>
+            <p class="product-meta">Открыть товары категории</p>
+            <div class="row">
+              <span class="btn btn-small">Открыть</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}
