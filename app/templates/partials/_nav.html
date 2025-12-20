@@ -1,0 +1,34 @@
+{# app/templates/partials/_nav.html #}
+
+<header class="header">
+  <div class="header-inner">
+    <a class="brand" href="{{ url_for('main.index') }}">
+      <span class="brand-badge" aria-hidden="true"></span>
+      <span>Flask Portal</span>
+    </a>
+
+    <nav class="nav" aria-label="Навигация">
+      <a href="{{ url_for('main.index') }}">Главная</a>
+      <a href="{{ url_for('main.catalog') }}">Каталог</a>
+      <a href="{{ url_for('main.categories') }}">Категории</a>
+      <a href="{{ url_for('main.offers') }}">Акции</a>
+      <a href="{{ url_for('main.search') }}">Поиск</a>
+      <a href="{{ url_for('feedback.form') }}">Обратная связь</a>
+      <a href="{{ url_for('main.about') }}">О проекте</a>
+      <a href="{{ url_for('main.contacts') }}">Контакты</a>
+
+      {% if current_user %}
+        <a class="pill" href="{{ url_for('cabinet.dashboard') }}">ЛК</a>
+
+        {% if current_user.role in ['admin','manager'] %}
+          <a class="pill" href="{{ url_for('admin.dashboard') }}">Админка</a>
+        {% endif %}
+
+        <a href="{{ url_for('auth.logout') }}" data-confirm="Выйти из системы?">Выход</a>
+      {% else %}
+        <a class="pill" href="{{ url_for('auth.login') }}">Вход</a>
+        <a href="{{ url_for('auth.register') }}">Регистрация</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
