@@ -24,9 +24,9 @@ bp = Blueprint("feedback", __name__)
 
 def _is_staff_user() -> bool:
     return bool(
-        current_user.is_authenticated
-        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
+        getattr(current_user, "is_authenticated", False)
         and getattr(current_user, "is_active", True)
+        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
     )
 
 
@@ -35,16 +35,15 @@ def feedback_home():
     """
     Обращения/заметки.
 
-    - Гость / обычный пользователь: показываем только форму отправки обращения (kind=request)
-    - Staff (admin/doctor/coach/operator): дополнительно видит список + фильтры + может закрывать
+    - Гость/обычный пользователь: только форма отправки (kind=request)
+    - Staff: форма + список + фильтры + закрытие
     """
     bc = crumbs(("Главная", url_for("routes.index")), ("Обращения и заметки", ""))
 
     athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
-
     is_staff = _is_staff_user()
 
-    # Фильтры списка (только staff)
+    # фильтры списка (только staff)
     athlete_id = request.args.get("athlete_id", type=int)
     kind = (request.args.get("kind") or "").strip() or None
     status = (request.args.get("status") or "").strip() or None
@@ -79,7 +78,7 @@ def feedback_home():
         items = query.offset((page - 1) * per_page).limit(per_page).all()
 
     return render_template(
-        "feedback.html",
+        "feedback.html",  # <-- актуальное имя по твоему скрину
         breadcrumbs=bc,
         athletes=athletes,
         is_staff=is_staff,
@@ -100,23 +99,23 @@ def feedback_home():
             "status": status or "",
             "q": q,
         },
+        kinds=[FEEDBACK_KIND_REQUEST, FEEDBACK_KIND_NOTE, FEEDBACK_KIND_INCIDENT],
+        statuses=[ALERT_STATUS_OPEN, ALERT_STATUS_CLOSED],
     )
 
 
 @bp.post("/")
 def feedback_create():
     """
-    Создание записи feedback.
+    Создание feedback.
 
-    - Гость / обычный пользователь: только FEEDBACK_KIND_REQUEST, без привязки к спортсмену
-    - Staff: может создавать note/incident/request и (опционально) привязать к спортсмену
+    - Гость/обычный пользователь: только request, без athlete
+    - Staff: request/note/incident + (опционально) athlete
     """
     title = (request.form.get("title") or "").strip()
     message = (request.form.get("message") or "").strip()
 
-    athlete_id_raw = (request.form.get("athlete_id") or "").strip()
-    athlete_id = int(athlete_id_raw) if athlete_id_raw.isdigit() else None
-
+    athlete_id = request.form.get("athlete_id", type=int)
     kind = (request.form.get("kind") or FEEDBACK_KIND_REQUEST).strip()
     status = ALERT_STATUS_OPEN
 
@@ -126,12 +125,12 @@ def feedback_create():
 
     is_staff = _is_staff_user()
 
-    # Ограничения для гостя/обычного пользователя
+    # ограничения для гостя/обычного пользователя
     if not is_staff:
         kind = FEEDBACK_KIND_REQUEST
         athlete_id = None
 
-    # Валидация kind для staff (чтобы не прилетело что-то левое)
+    # страховка kind для staff
     if is_staff and kind not in (FEEDBACK_KIND_REQUEST, FEEDBACK_KIND_NOTE, FEEDBACK_KIND_INCIDENT):
         kind = FEEDBACK_KIND_NOTE
 
@@ -144,7 +143,7 @@ def feedback_create():
 
     fb = Feedback(
         athlete=athlete,
-        author=current_user if current_user.is_authenticated else None,
+        author=current_user if getattr(current_user, "is_authenticated", False) else None,
         kind=kind,
         status=status,
         title=title,
@@ -165,15 +164,12 @@ def thanks():
         ("Обращения и заметки", url_for("feedback.feedback_home")),
         ("Готово", ""),
     )
-    return render_template("thanks.html", breadcrumbs=bc)
+    return render_template("thanks.html", breadcrumbs=bc)  # <-- актуальное имя по твоему скрину
 
 
 @bp.post("/<int:fb_id>/close")
 @staff_required
 def feedback_close(fb_id: int):
-    """
-    Закрытие обращения/заметки (только staff).
-    """
     fb = Feedback.query.get_or_404(fb_id)
     fb.status = ALERT_STATUS_CLOSED
     fb.closed_at = datetime.utcnow()
