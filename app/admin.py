@@ -14,6 +14,7 @@ from werkzeug.security import generate_password_hash
 
 from .auth import roles_required, staff_required
 from .db import db, safe_commit
+from .permissions import get_coach_team_ids, is_admin, is_coach, is_doctor, is_operator
 from .models import (
     ALERT_LEVEL_HIGH,
     ALERT_LEVEL_LOW,
@@ -56,6 +57,9 @@ from .utils import (
 bp = Blueprint("admin", __name__)
 
 admin_required = roles_required(ROLE_ADMIN)
+operator_required = roles_required(ROLE_ADMIN, ROLE_OPERATOR)
+data_entry_required = roles_required(ROLE_ADMIN, ROLE_COACH, ROLE_OPERATOR)
+doctor_or_admin_required = roles_required(ROLE_ADMIN, ROLE_DOCTOR)
 
 
 # -----------------------------
@@ -189,11 +193,32 @@ def _make_1c_csv_response(measurements: list[Measurement], *, filename: str) -> 
 def dashboard():
     bc = crumbs(("Главная", url_for("routes.index")), ("Администрирование", ""))
 
-    athletes_count = Athlete.query.count()
+    athletes_query = Athlete.query
+    measurements_query = Measurement.query.join(Measurement.athlete)
+    alerts_query = (
+        Alert.query
+        .join(Alert.measurement)
+        .join(Measurement.athlete)
+    )
+    feedback_query = Feedback.query
+
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids:
+            athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
+            measurements_query = measurements_query.filter(Athlete.team_id.in_(team_ids))
+            alerts_query = alerts_query.filter(Athlete.team_id.in_(team_ids))
+            feedback_query = (
+                feedback_query
+                .join(Feedback.athlete)
+                .filter(Athlete.team_id.in_(team_ids))
+            )
+
+    athletes_count = athletes_query.count()
     indicators_count = Indicator.query.count()
-    measurements_count = Measurement.query.count()
-    alerts_open = Alert.query.filter_by(status=ALERT_STATUS_OPEN).count()
-    feedback_open = Feedback.query.filter_by(status=ALERT_STATUS_OPEN).count()
+    measurements_count = measurements_query.count()
+    alerts_open = alerts_query.filter(Alert.status == ALERT_STATUS_OPEN).count()
+    feedback_open = feedback_query.filter(Feedback.status == ALERT_STATUS_OPEN).count()
 
     latest_exports = ExportBatch.query.order_by(ExportBatch.created_at.desc()).limit(10).all()
     latest_audit = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
@@ -220,7 +245,7 @@ def dashboard():
 # Teams
 # -----------------------------
 @bp.get("/teams")
-@staff_required
+@operator_required
 def teams():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -236,7 +261,7 @@ def teams():
 
 
 @bp.post("/teams")
-@staff_required
+@operator_required
 def teams_create():
     name = (request.form.get("name") or "").strip()
     parent_id = request.form.get("parent_id", type=int)
@@ -259,7 +284,7 @@ def teams_create():
 
 
 @bp.post("/teams/<int:team_id>/delete")
-@staff_required
+@operator_required
 def teams_delete(team_id: int):
     item = Team.query.get_or_404(team_id)
 
@@ -280,7 +305,7 @@ def teams_delete(team_id: int):
 # Indicator categories
 # -----------------------------
 @bp.get("/indicator-categories")
-@staff_required
+@operator_required
 def indicator_categories():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -297,7 +322,7 @@ def indicator_categories():
 
 
 @bp.post("/indicator-categories")
-@staff_required
+@operator_required
 def indicator_categories_create():
     name = (request.form.get("name") or "").strip()
     parent_id = request.form.get("parent_id", type=int)
@@ -320,7 +345,7 @@ def indicator_categories_create():
 
 
 @bp.post("/indicator-categories/<int:cat_id>/delete")
-@staff_required
+@operator_required
 def indicator_categories_delete(cat_id: int):
     item = IndicatorCategory.query.get_or_404(cat_id)
 
@@ -341,7 +366,7 @@ def indicator_categories_delete(cat_id: int):
 # Measure sources (справочник источников)
 # -----------------------------
 @bp.get("/sources")
-@staff_required
+@operator_required
 def sources():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -356,7 +381,7 @@ def sources():
 
 
 @bp.post("/sources")
-@staff_required
+@operator_required
 def sources_create():
     name = (request.form.get("name") or "").strip()
     code = (request.form.get("code") or "").strip().lower()
@@ -378,7 +403,7 @@ def sources_create():
 
 
 @bp.post("/sources/<int:source_id>/toggle")
-@staff_required
+@operator_required
 def sources_toggle(source_id: int):
     item = MeasureSource.query.get_or_404(source_id)
     item.is_active = not item.is_active
@@ -393,7 +418,7 @@ def sources_toggle(source_id: int):
 # Athletes
 # -----------------------------
 @bp.get("/athletes")
-@staff_required
+@operator_required
 def athletes():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -435,7 +460,7 @@ def athletes():
 
 
 @bp.post("/athletes")
-@staff_required
+@operator_required
 def athletes_create():
     full_name = (request.form.get("full_name") or "").strip()
     team_id = request.form.get("team_id", type=int)
@@ -466,7 +491,7 @@ def athletes_create():
 
 
 @bp.post("/athletes/<int:athlete_id>/toggle")
-@staff_required
+@operator_required
 def athletes_toggle(athlete_id: int):
     athlete = Athlete.query.get_or_404(athlete_id)
     athlete.is_active = not athlete.is_active
@@ -481,7 +506,7 @@ def athletes_toggle(athlete_id: int):
 # Indicators
 # -----------------------------
 @bp.get("/indicators")
-@staff_required
+@operator_required
 def indicators():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -522,7 +547,7 @@ def indicators():
 
 
 @bp.post("/indicators")
-@staff_required
+@operator_required
 def indicators_create():
     name = (request.form.get("name") or "").strip()
     unit = (request.form.get("unit") or "").strip() or None
@@ -552,7 +577,7 @@ def indicators_create():
 
 
 @bp.post("/indicators/<int:indicator_id>/toggle")
-@staff_required
+@operator_required
 def indicators_toggle(indicator_id: int):
     ind = Indicator.query.get_or_404(indicator_id)
     ind.is_active = not ind.is_active
@@ -567,7 +592,7 @@ def indicators_toggle(indicator_id: int):
 # Individual norms
 # -----------------------------
 @bp.get("/norms")
-@staff_required
+@operator_required
 def norms():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -609,7 +634,7 @@ def norms():
 
 
 @bp.post("/norms")
-@staff_required
+@operator_required
 def norms_create():
     athlete_id = request.form.get("athlete_id", type=int)
     indicator_id = request.form.get("indicator_id", type=int)
@@ -647,7 +672,7 @@ def norms_create():
 
 
 @bp.post("/norms/<int:norm_id>/delete")
-@staff_required
+@operator_required
 def norms_delete(norm_id: int):
     norm = AthleteIndicatorNorm.query.get_or_404(norm_id)
     db.session.delete(norm)
@@ -686,6 +711,10 @@ def measurements():
         .outerjoin(Measurement.source)
         .order_by(Measurement.measured_at.desc())
     )
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids:
+            query = query.filter(Athlete.team_id.in_(team_ids))
 
     if athlete_id:
         query = query.filter(Measurement.athlete_id == athlete_id)
@@ -703,9 +732,17 @@ def measurements():
 
     pagination = simple_paginate(query, page=page, per_page=per_page)
 
-    athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
+    athletes_query = Athlete.query.filter_by(is_active=True)
+    teams_query = Team.query
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids:
+            athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
+            teams_query = teams_query.filter(Team.id.in_(team_ids))
+
+    athletes = athletes_query.order_by(Athlete.full_name.asc()).all()
     indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
-    teams = Team.query.order_by(Team.name.asc()).all()
+    teams = teams_query.order_by(Team.name.asc()).all()
     sources = MeasureSource.query.filter_by(is_active=True).order_by(MeasureSource.code.asc()).all()
 
     ctx = _common_admin_context("measurements")
@@ -732,7 +769,7 @@ def measurements():
 
 
 @bp.post("/measurements")
-@staff_required
+@data_entry_required
 def measurements_create():
     athlete_id = request.form.get("athlete_id", type=int)
     indicator_id = request.form.get("indicator_id", type=int)
@@ -750,6 +787,12 @@ def measurements_create():
     if not athlete or not indicator:
         flash("Спортсмен или показатель не найден.", "danger")
         return redirect(url_for("admin.measurements"))
+
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids and athlete.team_id not in team_ids:
+            flash("Спортсмен не из вашей команды.", "danger")
+            return redirect(url_for("admin.measurements"))
 
     src = _get_source_by_code(source_code) or _get_source_by_code(SOURCE_CODE_MANUAL)
 
@@ -771,7 +814,7 @@ def measurements_create():
 
 
 @bp.post("/measurements/<int:measurement_id>/delete")
-@staff_required
+@operator_required
 def measurements_delete(measurement_id: int):
     m = Measurement.query.get_or_404(measurement_id)
     db.session.delete(m)
@@ -785,7 +828,7 @@ def measurements_delete(measurement_id: int):
 # Alerts (журнал отклонений)
 # -----------------------------
 @bp.get("/alerts")
-@staff_required
+@doctor_or_admin_required
 def alerts():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -826,7 +869,7 @@ def alerts():
 
 
 @bp.post("/alerts/<int:alert_id>/close")
-@staff_required
+@doctor_or_admin_required
 def alerts_close(alert_id: int):
     a = Alert.query.get_or_404(alert_id)
     a.status = ALERT_STATUS_CLOSED
@@ -844,7 +887,7 @@ def alerts_close(alert_id: int):
 # Export to 1C (CSV) + ExportBatch log
 # -----------------------------
 @bp.get("/export/1c")
-@staff_required
+@admin_required
 def export_1c():
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -879,7 +922,7 @@ def export_1c():
 
 
 @bp.post("/export/1c")
-@staff_required
+@admin_required
 def export_1c_post():
     athlete_id = request.form.get("athlete_id", type=int)
     indicator_id = request.form.get("indicator_id", type=int)
