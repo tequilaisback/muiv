@@ -1,0 +1,76 @@
+{# app/templates/login.html #}
+{% extends "base.html" %}
+
+{% block title %}Вход — {{ APP_TITLE }}{% endblock %}
+
+{% block content %}
+  <div class="grid grid--2">
+    <div class="card">
+      <div class="card__body">
+        <h1 class="card__title">Вход</h1>
+        <p class="card__subtitle">
+          Войдите под своей учетной записью, чтобы продолжить работу.
+        </p>
+
+        <form class="form mt-12" method="post" action="{{ url_for('auth.login_post') }}">
+          <input type="hidden" name="next" value="{{ next }}">
+
+          <div class="field">
+            <label>Логин</label>
+            <input
+              class="input"
+              name="username"
+              required
+              autocomplete="username"
+              placeholder="Ваш логин"
+              value="{{ request.form.get('username', '') }}"
+            >
+          </div>
+
+          <div class="field">
+            <label>Пароль</label>
+            <input
+              class="input"
+              type="password"
+              name="password"
+              required
+              autocomplete="current-password"
+              placeholder="Ваш пароль"
+            >
+          </div>
+
+          <label class="row" style="gap:8px; align-items:center;">
+            <input type="checkbox" name="remember" value="1" {% if request.form.get('remember') %}checked{% endif %}>
+            <span style="color: var(--muted); font-size: 13px;">Запомнить меня</span>
+          </label>
+
+          <div class="row">
+            <button class="btn btn--primary" type="submit">Войти</button>
+            <a class="btn" href="{{ url_for('auth.register') }}">Регистрация</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Нет учетной записи?</h2>
+        <p class="card__subtitle">
+          Зарегистрируйтесь, чтобы получить доступ к личному кабинету.
+        </p>
+
+        <div class="mt-16">
+          <a class="btn btn--primary" href="{{ url_for('auth.register') }}">Создать аккаунт</a>
+          <a class="btn" href="{{ url_for('routes.index') }}">На главную</a>
+        </div>
+
+        <div class="mt-16">
+          <span class="badge">Демо-проект</span>
+          <p class="mt-8" style="margin:0; color: var(--muted);">
+            Для доступа к роли сотрудника обратитесь к администратору системы.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
