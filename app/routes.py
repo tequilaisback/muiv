@@ -208,6 +208,9 @@ def catalog():
     )
 
     pagination = simple_paginate(q, page=page, per_page=per_page)
+    selected_athlete = Athlete.query.get(athlete_id) if athlete_id else None
+    if selected_athlete and team_ids and selected_athlete.team_id not in team_ids:
+        selected_athlete = None
 
     bc = crumbs(("Главная", url_for("routes.index")), ("Журнал измерений", ""))
 
@@ -217,6 +220,7 @@ def catalog():
         athletes=athletes,
         indicators=indicators,
         teams=teams,
+        selected_athlete=selected_athlete,
         filters={
             "athlete_id": athlete_id,
             "indicator_id": indicator_id,
