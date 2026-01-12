@@ -8,267 +8,53 @@
     <div>
       <h1 class="card__title" style="margin:0;">Личный кабинет</h1>
       <p class="card__subtitle" style="margin:6px 0 0;">
-        Быстрый доступ к вашим действиям: внесённые измерения и созданные заметки/обращения.
+        Краткая карточка профиля и роль в системе.
       </p>
     </div>
-
     <div class="row">
-      {% if is_admin or is_coach or is_operator %}
-        <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Внести измерение</a>
-      {% endif %}
-      <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Создать обращение</a>
-    </div>
-  </div>
-
-  {% if is_user %}
-    <div class="card mt-16">
-      <div class="card__body">
-        <h2 class="card__title">Мой профиль спортсмена</h2>
-        {% if athlete_profile %}
-          <p class="card__subtitle">
-            Команда: <b>{{ athlete_profile.team.name if athlete_profile.team else "не назначена" }}</b>
-          </p>
-          <div class="row mt-12">
-            <a class="btn btn--primary" href="{{ url_for('routes.product', athlete_id=athlete_profile.id) }}">Мои показатели</a>
-          </div>
-        {% else %}
-          <p class="card__subtitle">
-            Профиль спортсмена пока не создан. Обратитесь к тренеру для добавления в команду.
-          </p>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-
-  {% if is_coach %}
-    <div class="card mt-16">
-      <div class="card__body">
-        <h2 class="card__title">Моя команда</h2>
-        <p class="card__subtitle">Соберите команду из пользователей-спортсменов.</p>
-
-        {% if not coach_team %}
-          <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_create') }}">
-            <div class="field">
-              <label>Название команды</label>
-              <input class="input" name="name" required placeholder="Например: Команда тренера">
-            </div>
-            <div class="row">
-              <button class="btn btn--primary" type="submit">Создать команду</button>
-            </div>
-          </form>
-        {% else %}
-          <div class="row mt-12 space-between">
-            <div>
-              <span class="badge">Команда</span>
-              <div style="margin-top:6px; font-weight:900;">{{ coach_team.name }}</div>
-            </div>
-          </div>
-
-          <div class="grid grid--2 mt-16">
-            <div class="card">
-              <div class="card__body">
-                <h3 class="card__title">Состав команды</h3>
-                {% if team_members and team_members|length > 0 %}
-                  <table class="table mt-12">
-                    <thead>
-                      <tr>
-                        <th>Пользователь</th>
-                        <th>Спортсмен</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for u in team_members %}
-                        <tr>
-                          <td><b>{{ u.username }}</b></td>
-                          <td>
-                            {% if u.athlete %}
-                              <a href="{{ url_for('routes.product', athlete_id=u.athlete.id) }}">{{ u.athlete.full_name }}</a>
-                            {% else %}
-                              —
-                            {% endif %}
-                          </td>
-                          <td style="text-align:right;">
-                            <form method="post" action="{{ url_for('cabinet.team_remove_user') }}" style="display:inline;">
-                              <input type="hidden" name="user_id" value="{{ u.id }}">
-                              <button class="btn btn--danger" type="submit" data-confirm="Удалить из команды?">Удалить</button>
-                            </form>
-                          </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                {% else %}
-                  <p class="mt-12" style="margin:0; color: var(--muted);">В команде пока нет спортсменов.</p>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card__body">
-                <h3 class="card__title">Добавить спортсмена</h3>
-                <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_add_user') }}">
-                  <div class="field">
-                    <label>Пользователь-спортсмен</label>
-                    <select name="user_id" required>
-                      <option value="">— выберите —</option>
-                      {% for u in users_pool %}
-                        <option value="{{ u.id }}">{{ u.username }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label>ФИО (если профиля ещё нет)</label>
-                    <input class="input" name="full_name" placeholder="Иванов Иван">
-                  </div>
-                  <div class="row">
-                    <button class="btn btn--primary" type="submit">Добавить в команду</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-
-  <div class="grid grid--2 mt-16">
-    <div class="card">
-      <div class="card__body">
-        <h2 class="card__title">Мои последние измерения</h2>
-        <p class="card__subtitle">Записи, которые вы добавляли в систему.</p>
-
-        {% if my_last_measurements and my_last_measurements|length > 0 %}
-          <table class="table mt-12">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Спортсмен</th>
-                <th>Показатель</th>
-                <th>Значение</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for m in my_last_measurements %}
-                {% set is_bad = (m.indicator and ((m.indicator.norm_min is not none and m.value < m.indicator.norm_min) or (m.indicator.norm_max is not none and m.value > m.indicator.norm_max))) %}
-                <tr>
-                  <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                  <td>
-                    <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
-                  </td>
-                  <td>{{ m.indicator.name }}</td>
-                  <td>
-                    <b>{{ m.value }}</b> {{ m.indicator.unit or "" }}
-                    {% if is_bad %}<span class="badge badge--bad" style="margin-left:8px;">Отклонение</span>{% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p class="mt-12" style="margin:0; color: var(--muted);">Пока нет внесённых вами измерений.</p>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card__body">
-        <h2 class="card__title">Мои обращения и заметки</h2>
-        <p class="card__subtitle">Созданные вами записи в разделе “Обращения”.</p>
-
-        {% if my_feedback and my_feedback|length > 0 %}
-          <table class="table mt-12">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Тип</th>
-                <th>Статус</th>
-                <th>Тема</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for f in my_feedback %}
-                <tr>
-                  <td>{{ f.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                  <td>
-                    {% if f.kind == 'incident' %}
-                      <span class="badge badge--bad">Инцидент</span>
-                    {% elif f.kind == 'note' %}
-                      <span class="badge">Заметка</span>
-                    {% else %}
-                      <span class="badge badge--warn">Обращение</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if f.status == 'closed' %}
-                      <span class="badge badge--ok">Закрыто</span>
-                    {% else %}
-                      <span class="badge badge--warn">Открыто</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <b>{{ f.title }}</b>
-                    {% if f.athlete %}
-                      <div style="color: var(--muted); font-size: 12px;">
-                        Спортсмен: <a href="{{ url_for('routes.product', athlete_id=f.athlete.id) }}">{{ f.athlete.full_name }}</a>
-                      </div>
-                    {% endif %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p class="mt-12" style="margin:0; color: var(--muted);">Пока нет созданных вами обращений/заметок.</p>
-        {% endif %}
-      </div>
+      <a class="btn" href="{{ url_for('routes.index') }}">На главную</a>
     </div>
   </div>
 
   <div class="card mt-16">
     <div class="card__body">
       <h2 class="card__title">Профиль</h2>
-      <p class="card__subtitle">
-        Вы вошли как <b>{{ current_user.username }}</b> (роль: <b>{{ current_user.role }}</b>).
-      </p>
-
-      <div class="row mt-12">
-        <span class="badge" data-tip="Email хранится, если был указан">{{ current_user.email or "email не указан" }}</span>
-        <span class="badge" data-tip="Последний вход в систему">{{ current_user.last_login_at.strftime('%Y-%m-%d %H:%M') if current_user.last_login_at else "нет данных" }}</span>
-      </div>
+      <table class="table mt-12">
+        <tbody>
+          <tr>
+            <th>Логин</th>
+            <td><b>{{ current_user.username }}</b></td>
+          </tr>
+          <tr>
+            <th>Роль</th>
+            <td>{{ role_title }}</td>
+          </tr>
+          <tr>
+            <th>Email</th>
+            <td>{{ current_user.email or "—" }}</td>
+          </tr>
+          <tr>
+            <th>Статус</th>
+            <td>
+              {% if current_user.is_active %}
+                <span class="badge badge--ok">Активен</span>
+              {% else %}
+                <span class="badge badge--warn">Неактивен</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% if team_label %}
+            <tr>
+              <th>Команда</th>
+              <td>{{ team_label }}</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <th>Последний вход</th>
+            <td>{{ current_user.last_login_at.strftime('%Y-%m-%d %H:%M') if current_user.last_login_at else "—" }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
-
-  {% if is_user %}
-    <div class="card mt-16">
-      <div class="card__body">
-        <h2 class="card__title">Рекомендации врача</h2>
-        <p class="card__subtitle">Последние рекомендации, связанные с вашим профилем.</p>
-
-        {% if doctor_recommendations and doctor_recommendations|length > 0 %}
-          <table class="table mt-12">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Тема</th>
-                <th>Сообщение</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in doctor_recommendations %}
-                <tr>
-                  <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                  <td><b>{{ r.title }}</b></td>
-                  <td>{{ r.message }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p class="mt-12" style="margin:0; color: var(--muted);">Рекомендаций пока нет.</p>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
 {% endblock %}
