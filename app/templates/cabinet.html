@@ -1,28 +1,129 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/cabinet.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Личный кабинет — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Личный кабинет</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Быстрый доступ к вашим действиям: внесённые измерения и созданные заметки/обращения.
+      </p>
+    </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+    <div class="row">
+      {% if current_user.has_role('admin', 'doctor', 'coach', 'operator') %}
+        <a class="btn btn--primary" href="{{ url_for('cabinet.measurement_new') }}">Внести измерение</a>
+      {% endif %}
+      <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Создать обращение</a>
+    </div>
+  </div>
 
-    {% block content %}{% endblock %}
-  </main>
+  <div class="grid grid--2 mt-16">
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Мои последние измерения</h2>
+        <p class="card__subtitle">Записи, которые вы добавляли в систему.</p>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+        {% if my_last_measurements and my_last_measurements|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Спортсмен</th>
+                <th>Показатель</th>
+                <th>Значение</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in my_last_measurements %}
+                {% set is_bad = (m.indicator and ((m.indicator.norm_min is not none and m.value < m.indicator.norm_min) or (m.indicator.norm_max is not none and m.value > m.indicator.norm_max))) %}
+                <tr>
+                  <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                  </td>
+                  <td>{{ m.indicator.name }}</td>
+                  <td>
+                    <b>{{ m.value }}</b> {{ m.indicator.unit or "" }}
+                    {% if is_bad %}<span class="badge badge--bad" style="margin-left:8px;">Отклонение</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">Пока нет внесённых вами измерений.</p>
+        {% endif %}
+      </div>
+    </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Мои обращения и заметки</h2>
+        <p class="card__subtitle">Созданные вами записи в разделе “Обращения”.</p>
+
+        {% if my_feedback and my_feedback|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Тип</th>
+                <th>Статус</th>
+                <th>Тема</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in my_feedback %}
+                <tr>
+                  <td>{{ f.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    {% if f.kind == 'incident' %}
+                      <span class="badge badge--bad">Инцидент</span>
+                    {% elif f.kind == 'note' %}
+                      <span class="badge">Заметка</span>
+                    {% else %}
+                      <span class="badge badge--warn">Обращение</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if f.status == 'closed' %}
+                      <span class="badge badge--ok">Закрыто</span>
+                    {% else %}
+                      <span class="badge badge--warn">Открыто</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <b>{{ f.title }}</b>
+                    {% if f.athlete %}
+                      <div style="color: var(--muted); font-size: 12px;">
+                        Спортсмен: <a href="{{ url_for('routes.product', athlete_id=f.athlete.id) }}">{{ f.athlete.full_name }}</a>
+                      </div>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">Пока нет созданных вами обращений/заметок.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Профиль</h2>
+      <p class="card__subtitle">
+        Вы вошли как <b>{{ current_user.username }}</b> (роль: <b>{{ current_user.role }}</b>).
+      </p>
+
+      <div class="row mt-12">
+        <span class="badge" data-tip="Email хранится, если был указан">{{ current_user.email or "email не указан" }}</span>
+        <span class="badge" data-tip="Последний вход в систему">{{ current_user.last_login_at.strftime('%Y-%m-%d %H:%M') if current_user.last_login_at else "нет данных" }}</span>
+      </div>
+    </div>
+  </div>
+{% endblock %}
