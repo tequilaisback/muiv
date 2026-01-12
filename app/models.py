@@ -76,6 +76,12 @@ class User(db.Model, UserMixin):
         lazy="select",
     )
 
+    teams_managed = db.relationship(
+        "Team",
+        back_populates="coach",
+        lazy="select",
+    )
+
     alerts_closed = db.relationship(
         "Alert",
         back_populates="closed_by",
@@ -86,6 +92,13 @@ class User(db.Model, UserMixin):
     audit_events = db.relationship(
         "AuditLog",
         back_populates="user",
+        lazy="select",
+    )
+
+    athlete = db.relationship(
+        "Athlete",
+        back_populates="user",
+        uselist=False,
         lazy="select",
     )
 
@@ -104,6 +117,9 @@ class Team(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False, index=True)
+
+    coach_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    coach = db.relationship("User", back_populates="teams_managed", lazy="select")
 
     parent_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
     parent = db.relationship("Team", remote_side=[id], backref="children")
@@ -144,6 +160,9 @@ class Athlete(db.Model):
     __tablename__ = "athletes"
 
     id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, unique=True, index=True)
+    user = db.relationship("User", back_populates="athlete", lazy="select")
 
     full_name = db.Column(db.String(180), nullable=False, index=True)
     birth_date = db.Column(db.Date, nullable=True)
