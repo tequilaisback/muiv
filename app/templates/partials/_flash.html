@@ -1,11 +1,19 @@
 {# app/templates/partials/_flash.html #}
-
-{% with messages = get_flashed_messages(with_categories=true) %}
+{% with messages = get_flashed_messages(with_categories=True) %}
   {% if messages %}
-    <div class="flash-wrap" role="status" aria-live="polite">
+    <div class="flash container" data-autohide="1">
       {% for category, message in messages %}
-        {# category: success / warning / danger / info #}
-        <div class="flash {{ category|e }}">
+        {% set cls = "" %}
+        {% if category in ["success"] %}
+          {% set cls = "flash__item--success" %}
+        {% elif category in ["warning"] %}
+          {% set cls = "flash__item--warning" %}
+        {% elif category in ["danger", "error"] %}
+          {% set cls = "flash__item--danger" %}
+        {% endif %}
+
+        <div class="flash__item {{ cls }}">
+          <button class="flash__close" type="button" aria-label="Закрыть">✕</button>
           {{ message }}
         </div>
       {% endfor %}
