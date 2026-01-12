@@ -79,7 +79,7 @@
 
   <div class="card mt-16">
     <div class="card__body">
-      {% if pagination.items and pagination.items|length > 0 %}
+      {% if pagination["items"] and pagination["items"]|length > 0 %}
         <table class="table">
           <thead>
             <tr>
@@ -90,22 +90,34 @@
               <th>Значение</th>
               <th>Норма</th>
               <th>Причина</th>
+              <th>Статус</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {% for m in pagination.items %}
-              {% set nmin = m.indicator.norm_min %}
-              {% set nmax = m.indicator.norm_max %}
-              {% set low = (nmin is not none and m.value < nmin) %}
-              {% set high = (nmax is not none and m.value > nmax) %}
+            {% for a in pagination["items"] %}
+              {% set m = a.measurement %}
+              {% set ind = m.indicator if m else None %}
+              {% set nmin = ind.norm_min if ind else none %}
+              {% set nmax = ind.norm_max if ind else none %}
               <tr>
-                <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ m.athlete.team.name if m.athlete.team else "—" }}</td>
+                <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') if m and m.measured_at else "—" }}</td>
+                <td>{{ m.athlete.team.name if m and m.athlete and m.athlete.team else "—" }}</td>
                 <td>
-                  <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                  {% if m and m.athlete %}
+                    <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
-                <td>{{ m.indicator.name }}</td>
-                <td><b>{{ m.value }}</b> {{ m.indicator.unit or "" }}</td>
+                <td>{{ ind.name if ind else "—" }}</td>
+                <td>
+                  {% if m %}
+                    <b>{{ m.value }}</b> {{ ind.unit if ind and ind.unit else "" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
                 <td>
                   {% if nmin is not none or nmax is not none %}
                     {{ nmin if nmin is not none else "—" }} — {{ nmax if nmax is not none else "—" }}
@@ -114,12 +126,28 @@
                   {% endif %}
                 </td>
                 <td>
-                  {% if low %}
+                  {% if a.level == 'low' %}
                     <span class="badge badge--bad">Ниже нормы</span>
-                  {% elif high %}
+                  {% elif a.level == 'high' %}
                     <span class="badge badge--bad">Выше нормы</span>
                   {% else %}
                     <span class="badge badge--warn">Вне диапазона</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if a.status == 'closed' %}
+                    <span class="badge badge--ok">Закрыто</span>
+                  {% else %}
+                    <span class="badge badge--warn">Открыто</span>
+                  {% endif %}
+                </td>
+                <td style="text-align:right;">
+                  {% if (is_admin or is_doctor) and a.status != 'closed' %}
+                    <form method="post" action="{{ url_for('admin.alerts_close', alert_id=a.id) }}" style="display:inline;">
+                      <button class="btn btn--danger" type="submit">Закрыть</button>
+                    </form>
+                  {% else %}
+                    <span class="badge">—</span>
                   {% endif %}
                 </td>
               </tr>
