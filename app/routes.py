@@ -7,20 +7,17 @@ from typing import Optional
 from flask import Blueprint, render_template, request, url_for
 from flask_login import current_user
 
-from sqlalchemy.orm import aliased
-
-from .db import db
 from .auth import staff_required
 from .models import (
     Alert,
     Athlete,
-    AthleteIndicatorNorm,
     Indicator,
     IndicatorCategory,
     Measurement,
     Team,
 )
 from .utils import (
+    apply_out_of_range_filter,
     crumbs,
     clamp_int,
     simple_paginate,
@@ -47,10 +44,10 @@ def _apply_measurement_filters(
     out_only: bool = False,
 ):
     """
-    Применяет фильтры к запросу Measurement.
+    Фильтры по Measurement.
 
-    ВАЖНО: out_only учитывает индивидуальные нормы AthleteIndicatorNorm (если есть),
-    иначе общие нормы Indicator.
+    out_only учитывает индивидуальные нормы (AthleteIndicatorNorm),
+    иначе общие нормы Indicator — через utils.apply_out_of_range_filter().
     """
     if athlete_id:
         q = q.filter(Measurement.athlete_id == athlete_id)
@@ -68,27 +65,7 @@ def _apply_measurement_filters(
         q = q.filter(Measurement.measured_at <= period_to)
 
     if out_only:
-        # Индивидуальные нормы (если есть) должны "перекрывать" общие.
-        Norm = aliased(AthleteIndicatorNorm)
-
-        q = q.outerjoin(
-            Norm,
-            db.and_(
-                Norm.athlete_id == Measurement.athlete_id,
-                Norm.indicator_id == Measurement.indicator_id,
-                Norm.is_active.is_(True),
-            ),
-        )
-
-        eff_min = db.func.coalesce(Norm.norm_min, Indicator.norm_min)
-        eff_max = db.func.coalesce(Norm.norm_max, Indicator.norm_max)
-
-        q = q.filter(
-            db.or_(
-                db.and_(eff_min.isnot(None), Measurement.value < eff_min),
-                db.and_(eff_max.isnot(None), Measurement.value > eff_max),
-            )
-        )
+        q = apply_out_of_range_filter(q)
 
     return q
 
@@ -99,9 +76,8 @@ def _apply_measurement_filters(
 @bp.get("/")
 def index():
     """
-    Главная страница доступна гостю.
-    Чтобы гостю не светить “рабочие данные”, показываем только агрегаты.
-    Для staff — дополнительно последние записи.
+    Гостю показываем только агрегаты.
+    Staff — дополнительно последние измерения и последние alerts.
     """
     athletes_count = Athlete.query.filter_by(is_active=True).count()
     indicators_count = Indicator.query.filter_by(is_active=True).count()
@@ -109,11 +85,15 @@ def index():
     latest_measurements = []
     alerts_recent = []
 
-    if current_user.is_authenticated and getattr(current_user, "has_role", None) and current_user.has_role(
-        "admin", "doctor", "coach", "operator"
-    ):
+    is_staff = bool(
+        current_user.is_authenticated
+        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
+    )
+
+    if is_staff:
         latest_measurements = (
-            Measurement.query.join(Measurement.athlete)
+            Measurement.query
+            .join(Measurement.athlete)
             .join(Measurement.indicator)
             .order_by(Measurement.measured_at.desc())
             .limit(12)
@@ -122,7 +102,10 @@ def index():
 
         since = datetime.utcnow() - timedelta(days=7)
         alerts_recent = (
-            Alert.query.join(Alert.measurement)
+            Alert.query
+            .join(Alert.measurement)
+            .join(Measurement.athlete)
+            .join(Measurement.indicator)
             .filter(Measurement.measured_at >= since)
             .order_by(Alert.created_at.desc())
             .limit(12)
@@ -132,12 +115,13 @@ def index():
     bc = crumbs(("Главная", ""))
 
     return render_template(
-        "index.html",
+        "dashboard.html",  # было: index.html
         breadcrumbs=bc,
         athletes_count=athletes_count,
         indicators_count=indicators_count,
         latest_measurements=latest_measurements,
         alerts_recent=alerts_recent,
+        is_staff=is_staff,
     )
 
 
@@ -154,7 +138,7 @@ def contacts():
 
 
 # -------------------------
-# STAFF-ONLY PAGES (AUTH REQUIRED)
+# STAFF-ONLY PAGES
 # -------------------------
 @bp.get("/catalog")
 @staff_required
@@ -193,7 +177,7 @@ def catalog():
     bc = crumbs(("Главная", url_for("routes.index")), ("Журнал измерений", ""))
 
     return render_template(
-        "catalog.html",
+        "measurements.html",  # было: catalog.html
         breadcrumbs=bc,
         athletes=athletes,
         indicators=indicators,
@@ -215,7 +199,7 @@ def catalog():
 @staff_required
 def offers():
     """
-    Отклонения — теперь из таблицы alerts (а не фильтром по measurements).
+    Отклонения — из таблицы alerts.
     """
     athletes, indicators, teams = _get_common_lists()
 
@@ -250,10 +234,8 @@ def offers():
 
     bc = crumbs(("Главная", url_for("routes.index")), ("Отклонения от нормы", ""))
 
-    # В шаблоне offers.html ожидаются "items" как измерения.
-    # Чтобы не ломать шаблон — отдаём alerts, но в шаблоне нужно читать: a.measurement....
     return render_template(
-        "offers.html",
+        "alerts.html",  # было: offers.html
         breadcrumbs=bc,
         athletes=athletes,
         indicators=indicators,
@@ -266,7 +248,7 @@ def offers():
             "to": period_to.strftime("%Y-%m-%d %H:%M") if period_to else "",
             "per_page": per_page,
         },
-        pagination=pagination,
+        pagination=pagination,  # items = Alert, в шаблоне: a.measurement.athlete / a.measurement.indicator
     )
 
 
@@ -285,7 +267,7 @@ def categories():
     bc = crumbs(("Главная", url_for("routes.index")), ("Показатели и нормы", ""))
 
     return render_template(
-        "categories.html",
+        "indicators.html",  # было: categories.html
         breadcrumbs=bc,
         categories=cats,
         indicators=indicators,
@@ -355,7 +337,7 @@ def product(athlete_id: int):
     )
 
     return render_template(
-        "product.html",
+        "athlete.html",  # было: product.html
         breadcrumbs=bc,
         athlete=athlete,
         last_measurements=last_measurements,
