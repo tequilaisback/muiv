@@ -599,6 +599,24 @@ def seed_db() -> None:
     sources = _ensure_sources()
     athletes = _ensure_athletes(teams)
 
+    coach = users.get("coach")
+    coach_team = teams.get("group_a")
+    if coach and coach_team and coach_team.coach_id != coach.id:
+        coach_team.coach = coach
+        db.session.add(coach_team)
+
+    demo_user = users.get("user")
+    if demo_user:
+        linked = Athlete.query.filter_by(user_id=demo_user.id).first()
+        if not linked and athletes:
+            linked = athletes[0]
+            linked.user = demo_user
+            if not linked.team_id and coach_team:
+                linked.team = coach_team
+            db.session.add(linked)
+
+    safe_commit()
+
     _ensure_some_individual_norms(athletes, indicators)
 
     created_by = users.get("operator") or users.get("coach") or users.get("doctor") or users.get("admin")
