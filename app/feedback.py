@@ -17,6 +17,7 @@ from .models import (
     Athlete,
     Feedback,
 )
+from .permissions import get_coach_team_ids, is_coach
 from .utils import crumbs, clamp_int
 
 bp = Blueprint("feedback", __name__)
@@ -40,7 +41,12 @@ def feedback_home():
     """
     bc = crumbs(("Главная", url_for("routes.index")), ("Обращения и заметки", ""))
 
-    athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
+    athletes_query = Athlete.query.filter_by(is_active=True)
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids:
+            athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
+    athletes = athletes_query.order_by(Athlete.full_name.asc()).all()
     is_staff = _is_staff_user()
 
     # фильтры списка (только staff)
@@ -58,6 +64,10 @@ def feedback_home():
 
     if is_staff:
         query = Feedback.query.order_by(Feedback.created_at.desc())
+        if is_coach(current_user):
+            team_ids = get_coach_team_ids(current_user)
+            if team_ids:
+                query = query.join(Feedback.athlete).filter(Athlete.team_id.in_(team_ids))
 
         if athlete_id:
             query = query.filter(Feedback.athlete_id == athlete_id)
