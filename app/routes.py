@@ -4,21 +4,37 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from flask import Blueprint, render_template, request, url_for, redirect, flash
-from flask_login import current_user, login_required
+from flask import Blueprint, render_template, request, url_for
+from flask_login import current_user
+
+from sqlalchemy.orm import aliased
 
 from .db import db
-from .models import Athlete, Indicator, IndicatorCategory, Team, Measurement
+from .auth import staff_required
+from .models import (
+    Alert,
+    Athlete,
+    AthleteIndicatorNorm,
+    Indicator,
+    IndicatorCategory,
+    Measurement,
+    Team,
+)
 from .utils import (
     crumbs,
-    parse_datetime,
-    to_float,
     clamp_int,
     simple_paginate,
     get_period_from_request,
 )
 
 bp = Blueprint("routes", __name__)
+
+
+def _get_common_lists():
+    athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
+    indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
+    teams = Team.query.order_by(Team.name.asc()).all()
+    return athletes, indicators, teams
 
 
 def _apply_measurement_filters(
@@ -32,6 +48,9 @@ def _apply_measurement_filters(
 ):
     """
     Применяет фильтры к запросу Measurement.
+
+    ВАЖНО: out_only учитывает индивидуальные нормы AthleteIndicatorNorm (если есть),
+    иначе общие нормы Indicator.
     """
     if athlete_id:
         q = q.filter(Measurement.athlete_id == athlete_id)
@@ -49,60 +68,66 @@ def _apply_measurement_filters(
         q = q.filter(Measurement.measured_at <= period_to)
 
     if out_only:
-        # out_of_range вычисляется через нормы индикатора,
-        # поэтому фильтруем по Indicator.norm_min/norm_max и Measurement.value
-        q = q.join(Measurement.indicator).filter(
+        # Индивидуальные нормы (если есть) должны "перекрывать" общие.
+        Norm = aliased(AthleteIndicatorNorm)
+
+        q = q.outerjoin(
+            Norm,
+            db.and_(
+                Norm.athlete_id == Measurement.athlete_id,
+                Norm.indicator_id == Measurement.indicator_id,
+                Norm.is_active.is_(True),
+            ),
+        )
+
+        eff_min = db.func.coalesce(Norm.norm_min, Indicator.norm_min)
+        eff_max = db.func.coalesce(Norm.norm_max, Indicator.norm_max)
+
+        q = q.filter(
             db.or_(
-                db.and_(Indicator.norm_min.isnot(None), Measurement.value < Indicator.norm_min),
-                db.and_(Indicator.norm_max.isnot(None), Measurement.value > Indicator.norm_max),
+                db.and_(eff_min.isnot(None), Measurement.value < eff_min),
+                db.and_(eff_max.isnot(None), Measurement.value > eff_max),
             )
         )
 
     return q
 
 
-def _get_common_lists():
-    """
-    Часто используемые списки для фильтров.
-    """
-    athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
-    indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
-    teams = Team.query.order_by(Team.name.asc()).all()
-    return athletes, indicators, teams
-
-
+# -------------------------
+# PUBLIC (GUEST) PAGES
+# -------------------------
 @bp.get("/")
 def index():
-    # быстрые цифры
+    """
+    Главная страница доступна гостю.
+    Чтобы гостю не светить “рабочие данные”, показываем только агрегаты.
+    Для staff — дополнительно последние записи.
+    """
     athletes_count = Athlete.query.filter_by(is_active=True).count()
     indicators_count = Indicator.query.filter_by(is_active=True).count()
 
-    # последние измерения
-    latest_measurements = (
-        Measurement.query
-        .join(Measurement.athlete)
-        .join(Measurement.indicator)
-        .order_by(Measurement.measured_at.desc())
-        .limit(12)
-        .all()
-    )
+    latest_measurements = []
+    alerts_recent = []
 
-    # отклонения за последние 7 дней
-    since = datetime.utcnow() - timedelta(days=7)
-    out_7d = (
-        Measurement.query
-        .join(Measurement.indicator)
-        .filter(Measurement.measured_at >= since)
-        .filter(
-            db.or_(
-                db.and_(Indicator.norm_min.isnot(None), Measurement.value < Indicator.norm_min),
-                db.and_(Indicator.norm_max.isnot(None), Measurement.value > Indicator.norm_max),
-            )
+    if current_user.is_authenticated and getattr(current_user, "has_role", None) and current_user.has_role(
+        "admin", "doctor", "coach", "operator"
+    ):
+        latest_measurements = (
+            Measurement.query.join(Measurement.athlete)
+            .join(Measurement.indicator)
+            .order_by(Measurement.measured_at.desc())
+            .limit(12)
+            .all()
         )
-        .order_by(Measurement.measured_at.desc())
-        .limit(12)
-        .all()
-    )
+
+        since = datetime.utcnow() - timedelta(days=7)
+        alerts_recent = (
+            Alert.query.join(Alert.measurement)
+            .filter(Measurement.measured_at >= since)
+            .order_by(Alert.created_at.desc())
+            .limit(12)
+            .all()
+        )
 
     bc = crumbs(("Главная", ""))
 
@@ -112,10 +137,27 @@ def index():
         athletes_count=athletes_count,
         indicators_count=indicators_count,
         latest_measurements=latest_measurements,
-        out_of_range_recent=out_7d,
+        alerts_recent=alerts_recent,
     )
 
+
+@bp.get("/about")
+def about():
+    bc = crumbs(("Главная", url_for("routes.index")), ("О системе", ""))
+    return render_template("about.html", breadcrumbs=bc)
+
+
+@bp.get("/contacts")
+def contacts():
+    bc = crumbs(("Главная", url_for("routes.index")), ("Контакты", ""))
+    return render_template("contacts.html", breadcrumbs=bc)
+
+
+# -------------------------
+# STAFF-ONLY PAGES (AUTH REQUIRED)
+# -------------------------
 @bp.get("/catalog")
+@staff_required
 def catalog():
     athletes, indicators, teams = _get_common_lists()
 
@@ -135,6 +177,7 @@ def catalog():
         .join(Measurement.indicator)
         .order_by(Measurement.measured_at.desc())
     )
+
     q = _apply_measurement_filters(
         q,
         athlete_id=athlete_id,
@@ -168,38 +211,67 @@ def catalog():
     )
 
 
-@bp.get("/products/<int:athlete_id>")
-def product(athlete_id: int):
-    athlete = Athlete.query.get_or_404(athlete_id)
+@bp.get("/offers")
+@staff_required
+def offers():
+    """
+    Отклонения — теперь из таблицы alerts (а не фильтром по measurements).
+    """
+    athletes, indicators, teams = _get_common_lists()
 
-    # последние измерения спортсмена
-    last_measurements = (
-        Measurement.query
-        .filter_by(athlete_id=athlete.id)
+    athlete_id = request.args.get("athlete_id", type=int)
+    indicator_id = request.args.get("indicator_id", type=int)
+    team_id = request.args.get("team_id", type=int)
+
+    period_from, period_to = get_period_from_request("from", "to")
+    page = clamp_int(request.args.get("page"), default=1, min_value=1, max_value=10_000)
+    per_page = clamp_int(request.args.get("per_page"), default=20, min_value=5, max_value=200)
+
+    q = (
+        Alert.query
+        .join(Alert.measurement)
+        .join(Measurement.athlete)
         .join(Measurement.indicator)
-        .order_by(Measurement.measured_at.desc())
-        .limit(50)
-        .all()
+        .order_by(Alert.created_at.desc())
     )
 
-    # список показателей для быстрого фильтра на странице
-    indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
+    if athlete_id:
+        q = q.filter(Measurement.athlete_id == athlete_id)
+    if indicator_id:
+        q = q.filter(Measurement.indicator_id == indicator_id)
+    if team_id:
+        q = q.filter(Athlete.team_id == team_id)
+    if period_from:
+        q = q.filter(Measurement.measured_at >= period_from)
+    if period_to:
+        q = q.filter(Measurement.measured_at <= period_to)
 
-    bc = crumbs(
-        ("Главная", url_for("routes.index")),
-        ("Журнал измерений", url_for("routes.catalog")),
-        (athlete.full_name, ""),
-    )
+    pagination = simple_paginate(q, page=page, per_page=per_page)
 
+    bc = crumbs(("Главная", url_for("routes.index")), ("Отклонения от нормы", ""))
+
+    # В шаблоне offers.html ожидаются "items" как измерения.
+    # Чтобы не ломать шаблон — отдаём alerts, но в шаблоне нужно читать: a.measurement....
     return render_template(
-        "product.html",
+        "offers.html",
         breadcrumbs=bc,
-        athlete=athlete,
-        last_measurements=last_measurements,
+        athletes=athletes,
         indicators=indicators,
+        teams=teams,
+        filters={
+            "athlete_id": athlete_id,
+            "indicator_id": indicator_id,
+            "team_id": team_id,
+            "from": period_from.strftime("%Y-%m-%d %H:%M") if period_from else "",
+            "to": period_to.strftime("%Y-%m-%d %H:%M") if period_to else "",
+            "per_page": per_page,
+        },
+        pagination=pagination,
     )
+
 
 @bp.get("/categories")
+@staff_required
 def categories():
     cats = IndicatorCategory.query.order_by(IndicatorCategory.name.asc()).all()
     indicators = (
@@ -219,56 +291,9 @@ def categories():
         indicators=indicators,
     )
 
-@bp.get("/offers")
-def offers():
-    athletes, indicators, teams = _get_common_lists()
-
-    athlete_id = request.args.get("athlete_id", type=int)
-    indicator_id = request.args.get("indicator_id", type=int)
-    team_id = request.args.get("team_id", type=int)
-
-    period_from, period_to = get_period_from_request("from", "to")
-    page = clamp_int(request.args.get("page"), default=1, min_value=1, max_value=10_000)
-    per_page = clamp_int(request.args.get("per_page"), default=20, min_value=5, max_value=200)
-
-    q = (
-        Measurement.query
-        .join(Measurement.athlete)
-        .join(Measurement.indicator)
-        .order_by(Measurement.measured_at.desc())
-    )
-    q = _apply_measurement_filters(
-        q,
-        athlete_id=athlete_id,
-        indicator_id=indicator_id,
-        team_id=team_id,
-        period_from=period_from,
-        period_to=period_to,
-        out_only=True,  # здесь всегда только отклонения
-    )
-
-    pagination = simple_paginate(q, page=page, per_page=per_page)
-
-    bc = crumbs(("Главная", url_for("routes.index")), ("Отклонения от нормы", ""))
-
-    return render_template(
-        "offers.html",
-        breadcrumbs=bc,
-        athletes=athletes,
-        indicators=indicators,
-        teams=teams,
-        filters={
-            "athlete_id": athlete_id,
-            "indicator_id": indicator_id,
-            "team_id": team_id,
-            "from": period_from.strftime("%Y-%m-%d %H:%M") if period_from else "",
-            "to": period_to.strftime("%Y-%m-%d %H:%M") if period_to else "",
-            "per_page": per_page,
-        },
-        pagination=pagination,
-    )
 
 @bp.get("/search")
+@staff_required
 def search():
     q = (request.args.get("q") or "").strip()
     team_id = request.args.get("team_id", type=int)
@@ -276,7 +301,7 @@ def search():
     athletes = []
     indicators = []
 
-    if q:
+    if q and len(q) >= 2:
         aq = Athlete.query.filter(Athlete.is_active.is_(True)).filter(Athlete.full_name.ilike(f"%{q}%"))
         if team_id:
             aq = aq.filter(Athlete.team_id == team_id)
@@ -298,20 +323,41 @@ def search():
     return render_template(
         "search.html",
         breadcrumbs=bc,
-        query=q,
+        q=q,
+        scope="all",
         teams=teams,
         team_id=team_id,
         athletes=athletes,
         indicators=indicators,
     )
 
-@bp.get("/about")
-def about():
-    bc = crumbs(("Главная", url_for("routes.index")), ("О системе", ""))
-    return render_template("about.html", breadcrumbs=bc)
 
+@bp.get("/products/<int:athlete_id>")
+@staff_required
+def product(athlete_id: int):
+    athlete = Athlete.query.get_or_404(athlete_id)
 
-@bp.get("/contacts")
-def contacts():
-    bc = crumbs(("Главная", url_for("routes.index")), ("Контакты", ""))
-    return render_template("contacts.html", breadcrumbs=bc)
+    last_measurements = (
+        Measurement.query
+        .filter_by(athlete_id=athlete.id)
+        .join(Measurement.indicator)
+        .order_by(Measurement.measured_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
+
+    bc = crumbs(
+        ("Главная", url_for("routes.index")),
+        ("Журнал измерений", url_for("routes.catalog")),
+        (athlete.full_name, ""),
+    )
+
+    return render_template(
+        "product.html",
+        breadcrumbs=bc,
+        athlete=athlete,
+        last_measurements=last_measurements,
+        indicators=indicators,
+    )
