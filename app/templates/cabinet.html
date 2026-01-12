@@ -57,4 +57,99 @@
       </table>
     </div>
   </div>
+
+  {% if is_coach %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Команда тренера</h2>
+        <p class="card__subtitle">Создание команды и добавление спортсменов.</p>
+
+        <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_create') }}">
+          <div class="field">
+            <label>{% if coach_team %}Название команды{% else %}Название новой команды{% endif %}</label>
+            <input class="input" name="name" required placeholder="Например: Команда тренера" value="{{ coach_team.name if coach_team else '' }}">
+          </div>
+          <div class="row">
+            <button class="btn btn--primary" type="submit">
+              {% if coach_team %}Сохранить название{% else %}Создать команду{% endif %}
+            </button>
+          </div>
+        </form>
+
+        {% if coach_team %}
+          <div class="row mt-12 space-between">
+            <div>
+              <span class="badge">Команда</span>
+              <div style="margin-top:6px; font-weight:900;">{{ coach_team.name }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid--2 mt-16">
+            <div class="card">
+              <div class="card__body">
+                <h3 class="card__title">Состав команды</h3>
+                {% if team_members and team_members|length > 0 %}
+                  <table class="table mt-12">
+                    <thead>
+                      <tr>
+                        <th>Пользователь</th>
+                        <th>Спортсмен</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for u in team_members %}
+                        <tr>
+                          <td><b>{{ u.username }}</b></td>
+                          <td>
+                            {% if u.athlete %}
+                              <a href="{{ url_for('routes.product', athlete_id=u.athlete.id) }}">{{ u.athlete.full_name }}</a>
+                            {% else %}
+                              —
+                            {% endif %}
+                          </td>
+                          <td style="text-align:right;">
+                            <form method="post" action="{{ url_for('cabinet.team_remove_user') }}" style="display:inline;">
+                              <input type="hidden" name="user_id" value="{{ u.id }}">
+                              <button class="btn btn--danger" type="submit" data-confirm="Удалить из команды?">Удалить</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <p class="mt-12" style="margin:0; color: var(--muted);">В команде пока нет спортсменов.</p>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card__body">
+                <h3 class="card__title">Добавить спортсмена</h3>
+                <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_add_user') }}">
+                  <div class="field">
+                    <label>Пользователь-спортсмен</label>
+                    <select name="user_id" required>
+                      <option value="">— выберите —</option>
+                      {% for u in users_pool %}
+                        <option value="{{ u.id }}">{{ u.username }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>ФИО (если профиля ещё нет)</label>
+                    <input class="input" name="full_name" placeholder="Иванов Иван">
+                  </div>
+                  <div class="row">
+                    <button class="btn btn--primary" type="submit">Добавить в команду</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}
