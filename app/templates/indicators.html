@@ -12,9 +12,6 @@
       </p>
     </div>
     <div class="row">
-      {% if is_admin or is_operator %}
-        <a class="btn btn--primary" href="{{ url_for('admin.indicators') }}">Управление</a>
-      {% endif %}
       <a class="btn" href="{{ url_for('routes.search') }}">Поиск</a>
     </div>
   </div>
