@@ -50,14 +50,29 @@ def cabinet_home():
     }
     role_title = role_labels.get(getattr(current_user, "role", None), "—")
 
-    team_label = None
     athlete_profile = getattr(current_user, "athlete", None)
+    is_coach_role = is_coach(current_user)
+
+    team_label = None
+    coach_team = None
+    team_members = []
+    users_pool = []
+
     if athlete_profile and athlete_profile.team:
         team_label = athlete_profile.team.name
-    elif is_coach(current_user):
+    elif is_coach_role:
         coach_teams = get_coach_teams(current_user)
-        if coach_teams:
-            team_label = coach_teams[0].name
+        coach_team = coach_teams[0] if coach_teams else None
+        if coach_team:
+            team_label = coach_team.name
+            team_members = (
+                User.query
+                .join(Athlete, Athlete.user_id == User.id)
+                .filter(User.role == ROLE_USER, Athlete.team_id == coach_team.id)
+                .order_by(User.username.asc())
+                .all()
+            )
+        users_pool = User.query.filter(User.role == ROLE_USER).order_by(User.username.asc()).all()
 
     return render_template(
         "cabinet.html",
@@ -65,6 +80,9 @@ def cabinet_home():
         athlete_profile=athlete_profile,
         role_title=role_title,
         team_label=team_label,
+        coach_team=coach_team,
+        team_members=team_members,
+        users_pool=users_pool,
     )
 
 
