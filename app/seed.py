@@ -95,7 +95,7 @@ def _ensure_users() -> dict[str, User]:
             username=username,
             defaults={
                 "email": email,
-                "password_hash": generate_password_hash(password),
+                "password_hash": generate_password_hash(password, method="pbkdf2:sha256"),
                 "role": role,
                 "is_active": True,
             },
@@ -109,7 +109,7 @@ def _ensure_users() -> dict[str, User]:
                 u.role = role
                 changed = True
             if not u.password_hash:
-                u.password_hash = generate_password_hash(password)
+                u.password_hash = generate_password_hash(password, method="pbkdf2:sha256")
                 changed = True
             if changed:
                 db.session.add(u)
