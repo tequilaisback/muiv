@@ -3,18 +3,20 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from datetime import datetime, date
-from functools import wraps
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse, urljoin
 
-from flask import abort, current_app, redirect, request, url_for, Response
+from flask import Response, abort, redirect, request, url_for
 from flask_login import current_user
 
+from .db import db, safe_commit
 
-# -----------------------------
-# Безопасные редиректы (next=...)
-# -----------------------------
+
+# ============================================================
+# Safe redirect (next=...)
+# ============================================================
 def is_safe_url(target: str) -> bool:
     """
     Защита от open-redirect. Разрешаем редирект только на тот же хост.
@@ -36,44 +38,12 @@ def redirect_next(default_endpoint: str, **values):
     return redirect(url_for(default_endpoint, **values))
 
 
-# -----------------------------
-# Роли и доступ
-# -----------------------------
-def roles_required(*roles: str):
-    """
-    Декоратор: пользователь должен быть авторизован и иметь одну из ролей.
-    Если не авторизован -> редирект на login.
-    Если авторизован, но нет роли -> 403.
-    """
-    def decorator(fn):
-        @wraps(fn)
-        def wrapper(*args, **kwargs):
-            if not current_user.is_authenticated:
-                return redirect(url_for("auth.login", next=request.path))
-            # User.has_role есть в models.py
-            if roles and not getattr(current_user, "has_role", lambda *_: False)(*roles):
-                abort(403)
-            return fn(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
-# Частые комбинации (удобно в коде)
-def admin_required(fn):
-    return roles_required("admin")(fn)
-
-
-def staff_required(fn):
-    # Врач/тренер/оператор/админ
-    return roles_required("admin", "doctor", "coach", "operator")(fn)
-
-
-# -----------------------------
-# Даты/время: парсинг и форматирование
-# -----------------------------
+# ============================================================
+# Dates & parsing
+# ============================================================
 def parse_date(value: Optional[str]) -> Optional[date]:
     """
-    Ожидаем ISO: YYYY-MM-DD
+    ISO: YYYY-MM-DD
     """
     if not value:
         return None
@@ -95,7 +65,6 @@ def parse_datetime(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     s = value.strip()
-    # если прислали только дату
     d = parse_date(s)
     if d and len(s) == 10:
         return datetime(d.year, d.month, d.day, 0, 0, 0)
@@ -106,9 +75,7 @@ def parse_datetime(value: Optional[str]) -> Optional[datetime]:
 
 
 def format_dt(dt: Optional[datetime]) -> str:
-    if not dt:
-        return ""
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return dt.strftime("%Y-%m-%d %H:%M") if dt else ""
 
 
 def to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -120,9 +87,9 @@ def to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
         return default
 
 
-# -----------------------------
-# Простейшая пагинация (без зависимости от paginate())
-# -----------------------------
+# ============================================================
+# Pagination helpers
+# ============================================================
 def clamp_int(value: Any, default: int, min_value: int, max_value: int) -> int:
     try:
         v = int(value)
@@ -133,17 +100,14 @@ def clamp_int(value: Any, default: int, min_value: int, max_value: int) -> int:
 
 def simple_paginate(query, page: int, per_page: int) -> Dict[str, Any]:
     """
-    query: SQLAlchemy query (Model.query или db.session.query(...))
-    Возвращает dict: items, page, per_page, total, pages
+    SQLAlchemy query -> dict pagination.
     """
-    page = max(1, page)
-    per_page = max(1, min(200, per_page))
+    page = max(1, int(page or 1))
+    per_page = max(1, min(200, int(per_page or 20)))
 
-    # total
     try:
         total = query.count()
     except Exception:
-        # если вдруг query уже лимитирован/сложный
         total = 0
 
     offset = (page - 1) * per_page
@@ -163,51 +127,177 @@ def simple_paginate(query, page: int, per_page: int) -> Dict[str, Any]:
     }
 
 
-# -----------------------------
-# Хлебные крошки (для templates/partials/_breadcrumbs.html)
-# -----------------------------
+# ============================================================
+# Breadcrumbs
+# ============================================================
 def crumbs(*items: Tuple[str, str]) -> List[Dict[str, str]]:
     """
     items: (title, url) — url может быть "" для текущей страницы.
     """
-    result = []
-    for title, url in items:
-        result.append({"title": title, "url": url or ""})
-    return result
+    return [{"title": title, "url": url or ""} for title, url in items]
 
 
-# -----------------------------
-# Экспорт CSV для 1С (под твою идею импорта)
-# -----------------------------
-def measurements_to_1c_csv_rows(measurements) -> List[List[str]]:
+# ============================================================
+# Period helpers (for filters / export)
+# ============================================================
+def get_period_from_request(from_key: str = "from", to_key: str = "to") -> Tuple[Optional[datetime], Optional[datetime]]:
     """
-    Делает строки под простой импорт в 1С:
-    Date consultation;Student name;Group name
+    period_from/period_to из query-string.
+    """
+    period_from = parse_datetime(request.args.get(from_key))
+    period_to = parse_datetime(request.args.get(to_key))
+    return period_from, period_to
 
-    Мы используем:
-    - Date consultation = measured_at
-    - Student name      = athlete.full_name
-    - Group name        = "{Indicator}={Value} {Unit}"
+
+# ============================================================
+# Norms & out-of-range (with athlete индивидуальные нормы)
+# ============================================================
+def get_effective_norm(
+    athlete_id: int,
+    indicator_id: int,
+) -> Tuple[Optional[float], Optional[float], bool]:
+    """
+    Возвращает (norm_min, norm_max, has_personal_norm).
+
+    Приоритет: AthleteIndicatorNorm (is_active=True) -> Indicator.norm_min/max.
+    """
+    from .models import AthleteIndicatorNorm, Indicator
+
+    personal = (
+        AthleteIndicatorNorm.query
+        .filter_by(athlete_id=athlete_id, indicator_id=indicator_id, is_active=True)
+        .first()
+    )
+    if personal:
+        return personal.norm_min, personal.norm_max, True
+
+    ind = Indicator.query.get(indicator_id)
+    if not ind:
+        return None, None, False
+
+    return ind.norm_min, ind.norm_max, False
+
+
+def is_out_of_range_value(
+    athlete_id: int,
+    indicator_id: int,
+    value: float,
+) -> Tuple[bool, Optional[float], Optional[float], bool]:
+    """
+    (out_of_range, norm_min, norm_max, used_personal_norm)
+    """
+    nmin, nmax, personal = get_effective_norm(athlete_id, indicator_id)
+    out = False
+    if nmin is not None and value < float(nmin):
+        out = True
+    if nmax is not None and value > float(nmax):
+        out = True
+    return out, nmin, nmax, personal
+
+
+def measurement_out_of_range(m) -> bool:
+    """
+    Быстрая проверка по объекту Measurement.
+    """
+    try:
+        if not m or m.athlete_id is None or m.indicator_id is None:
+            return False
+        return is_out_of_range_value(m.athlete_id, m.indicator_id, float(m.value))[0]
+    except Exception:
+        return False
+
+
+def apply_out_of_range_filter(query):
+    """
+    Применяет к запросу Measurement фильтр "вне нормы" с учётом индивидуальных норм.
+    Удобно вызывать в routes/admin вместо дублирования coalesce-логики.
+
+    Требует, чтобы query был по Measurement с join(Measurement.indicator) или
+    чтобы Indicator был доступен через join ниже (мы подцепим join сами).
+    """
+    from sqlalchemy.orm import aliased
+    from .models import AthleteIndicatorNorm, Indicator, Measurement
+
+    Norm = aliased(AthleteIndicatorNorm)
+
+    # гарантируем join Indicator (если уже был — SQLAlchemy нормально переживёт)
+    query = query.join(Measurement.indicator)
+
+    query = query.outerjoin(
+        Norm,
+        db.and_(
+            Norm.athlete_id == Measurement.athlete_id,
+            Norm.indicator_id == Measurement.indicator_id,
+            Norm.is_active.is_(True),
+        ),
+    )
+
+    eff_min = db.func.coalesce(Norm.norm_min, Indicator.norm_min)
+    eff_max = db.func.coalesce(Norm.norm_max, Indicator.norm_max)
+
+    return query.filter(
+        db.or_(
+            db.and_(eff_min.isnot(None), Measurement.value < eff_min),
+            db.and_(eff_max.isnot(None), Measurement.value > eff_max),
+        )
+    )
+
+
+# ============================================================
+# CSV export for 1C
+# ============================================================
+def measurements_to_1c_csv_rows(measurements, profile: str = "simple") -> List[List[str]]:
+    """
+    profile:
+      - "simple": 3 колонки (как в твоём примере импорта 1С)
+          Date consultation;Student name;Group name
+      - "full": расширенный журнал (удобен для реальной интеграции/проверки)
     """
     rows: List[List[str]] = []
+
     for m in measurements:
         dt = getattr(m, "measured_at", None)
         athlete = getattr(m, "athlete", None)
         indicator = getattr(m, "indicator", None)
+        source = getattr(m, "source", None)
+        created_by = getattr(m, "created_by", None)
+
+        dt_str = dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(dt, datetime) else ""
 
         athlete_name = getattr(athlete, "full_name", "") if athlete else ""
+        team_name = getattr(getattr(athlete, "team", None), "name", "") if athlete else ""
+
         ind_name = getattr(indicator, "name", "") if indicator else ""
         unit = getattr(indicator, "unit", "") if indicator else ""
         val = getattr(m, "value", "")
+        src_code = getattr(source, "code", "") if source else ""
+        created_by_name = getattr(created_by, "username", "") if created_by else ""
+        comment = getattr(m, "comment", "") or ""
 
-        # формат даты/времени максимально "понятный" для 1С/журнала
-        dt_str = dt.strftime("%Y-%m-%d %H:%M:%S") if isinstance(dt, datetime) else ""
+        if profile == "simple":
+            # Group name: компактная строка для "журнала"
+            cell = f"{ind_name}={val}".strip()
+            if unit:
+                cell = f"{cell} {unit}".strip()
+            if team_name:
+                cell = f"{team_name} | {cell}".strip()
+            rows.append([dt_str, athlete_name, cell])
+        else:
+            # full
+            rows.append(
+                [
+                    dt_str,
+                    athlete_name,
+                    team_name,
+                    ind_name,
+                    str(val),
+                    unit,
+                    src_code,
+                    created_by_name,
+                    comment,
+                ]
+            )
 
-        group_cell = f"{ind_name}={val}".strip()
-        if unit:
-            group_cell = f"{group_cell} {unit}".strip()
-
-        rows.append([dt_str, athlete_name, group_cell])
     return rows
 
 
@@ -215,39 +305,81 @@ def make_1c_csv_response(
     measurements,
     filename: str = "export_1c.csv",
     delimiter: str = ";",
+    profile: str = "simple",
 ) -> Response:
     """
-    Возвращает Flask Response с CSV (UTF-8 with BOM) для корректного открытия в 1С/Excel.
+    CSV Response (UTF-8 with BOM) — чтобы 1С/Excel корректно читали кириллицу.
     """
     output = io.StringIO()
     writer = csv.writer(output, delimiter=delimiter)
 
-    # заголовок под твой импорт
-    writer.writerow(["Date consultation", "Student name", "Group name"])
-    for row in measurements_to_1c_csv_rows(measurements):
+    if profile == "simple":
+        writer.writerow(["Date consultation", "Student name", "Group name"])
+    else:
+        writer.writerow(
+            [
+                "measured_at",
+                "athlete",
+                "team",
+                "indicator",
+                "value",
+                "unit",
+                "source_code",
+                "created_by",
+                "comment",
+            ]
+        )
+
+    for row in measurements_to_1c_csv_rows(measurements, profile=profile):
         writer.writerow(row)
 
-    csv_text = output.getvalue()
-    output.close()
-
-    # BOM чтобы Excel/1С не ломали кириллицу
-    data = ("\ufeff" + csv_text).encode("utf-8")
-
-    resp = Response(data, mimetype="text/csv; charset=utf-8")
-    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return resp
+    data = output.getvalue().encode("utf-8-sig")  # BOM
+    return Response(
+        data,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
-# -----------------------------
-# Утилита для периодов (часто нужна в фильтрах/экспорте)
-# -----------------------------
-def get_period_from_request(
-    from_key: str = "from",
-    to_key: str = "to",
-) -> Tuple[Optional[datetime], Optional[datetime]]:
+# ============================================================
+# Audit log helper
+# ============================================================
+def log_audit(
+    action: str,
+    entity: str,
+    entity_id: Optional[int] = None,
+    details: Optional[dict] = None,
+    *,
+    user=None,
+    commit: bool = False,
+) -> None:
     """
-    Берёт period_from/period_to из query-string.
+    Запись в audit_log.
+
+    По умолчанию только добавляет запись в текущую сессию (commit=False),
+    чтобы вызывающий код мог коммитить один раз за всю операцию.
+    Если commit=True — сделает safe_commit().
     """
-    period_from = parse_datetime(request.args.get(from_key))
-    period_to = parse_datetime(request.args.get(to_key))
-    return period_from, period_to
+    from .models import AuditLog
+
+    u = user if user is not None else (current_user if getattr(current_user, "is_authenticated", False) else None)
+
+    ev = AuditLog(
+        user=u,
+        action=(action or "").strip()[:64],
+        entity=(entity or "").strip()[:64],
+        entity_id=entity_id,
+        details_json=json.dumps(details or {}, ensure_ascii=False),
+        created_at=datetime.utcnow(),
+    )
+    db.session.add(ev)
+
+    if commit:
+        try:
+            safe_commit()
+        except Exception:
+            # если вдруг лог не пишется — не ломаем основную логику
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
