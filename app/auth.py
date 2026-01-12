@@ -12,6 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .db import db, safe_commit
 from .models import (
     User,
+    Athlete,
     ROLE_ADMIN,
     ROLE_COACH,
     ROLE_DOCTOR,
@@ -172,6 +173,10 @@ def register_post():
         is_active=True,
     )
     db.session.add(user)
+    db.session.flush()
+
+    athlete = Athlete(full_name=username, user=user, is_active=True)
+    db.session.add(athlete)
     safe_commit()
 
     login_user(user)
