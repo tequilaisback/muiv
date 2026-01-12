@@ -12,16 +12,18 @@
       </p>
     </div>
     <div class="row">
-      {% if is_staff %}
+      {% if is_admin %}
         <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
         <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
         <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Экспорт в 1С</a>
-      {% elif current_user.is_authenticated %}
+      {% elif is_staff %}
+        <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
+        <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
+        <a class="btn btn--primary" href="{{ url_for('cabinet.cabinet_home') }}">Кабинет</a>
+      {% elif is_user %}
         <a class="btn" href="{{ url_for('cabinet.cabinet_home') }}">Кабинет</a>
-        <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
-        <a class="btn btn--primary" href="{{ url_for('routes.about') }}">О системе</a>
+        <a class="btn btn--primary" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
       {% else %}
-        <a class="btn" href="{{ url_for('routes.about') }}">О системе</a>
         <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
         <a class="btn btn--primary" href="{{ url_for('auth.login') }}">Вход</a>
       {% endif %}
@@ -31,7 +33,7 @@
   {% if is_staff %}
     <div class="grid grid--4 mt-16">
       <div class="metric">
-        <div class="metric__label">Спортсмены</div>
+        <div class="metric__label">{% if is_coach %}Спортсмены команды{% else %}Спортсмены{% endif %}</div>
         <div class="metric__value">{{ athletes_count }}</div>
         <div class="metric__accent"></div>
       </div>
@@ -51,10 +53,10 @@
         <div class="metric__accent"></div>
       </div>
     </div>
-  {% else %}
+  {% elif is_user %}
     <div class="grid grid--2 mt-16">
       <div class="metric">
-        <div class="metric__label">Спортсмены</div>
+        <div class="metric__label">Мой профиль</div>
         <div class="metric__value">{{ athletes_count }}</div>
         <div class="metric__accent"></div>
       </div>
@@ -113,19 +115,21 @@
             </div>
           </a>
 
-          <a class="square-card" href="{{ url_for('admin.export_1c') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">Экспорт в 1С</p>
-              <p class="square-card__meta">CSV с фильтрами по периоду</p>
-            </div>
-          </a>
-        {% elif current_user.is_authenticated %}
+          {% if is_admin %}
+            <a class="square-card" href="{{ url_for('admin.export_1c') }}">
+              <div class="square-card__media"><span aria-hidden="true"></span></div>
+              <div class="square-card__body">
+                <p class="square-card__title">Экспорт в 1С</p>
+                <p class="square-card__meta">CSV с фильтрами по периоду</p>
+              </div>
+            </a>
+          {% endif %}
+        {% elif is_user %}
           <a class="square-card" href="{{ url_for('cabinet.cabinet_home') }}">
             <div class="square-card__media"><span aria-hidden="true"></span></div>
             <div class="square-card__body">
               <p class="square-card__title">Личный кабинет</p>
-              <p class="square-card__meta">Мои измерения и обращения</p>
+              <p class="square-card__meta">Мои показатели и рекомендации</p>
             </div>
           </a>
 
@@ -136,44 +140,12 @@
               <p class="square-card__meta">Форма сообщений и заметок</p>
             </div>
           </a>
-
-          <a class="square-card" href="{{ url_for('routes.about') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">О системе</p>
-              <p class="square-card__meta">Цели, функционал, интеграции</p>
-            </div>
-          </a>
-
-          <a class="square-card" href="{{ url_for('routes.contacts') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">Контакты</p>
-              <p class="square-card__meta">Связь с администрацией</p>
-            </div>
-          </a>
         {% else %}
-          <a class="square-card" href="{{ url_for('routes.about') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">О системе</p>
-              <p class="square-card__meta">Что умеет система мониторинга</p>
-            </div>
-          </a>
-
           <a class="square-card" href="{{ url_for('feedback.feedback_home') }}">
             <div class="square-card__media"><span aria-hidden="true"></span></div>
             <div class="square-card__body">
               <p class="square-card__title">Обращения</p>
               <p class="square-card__meta">Публичная форма сообщений</p>
-            </div>
-          </a>
-
-          <a class="square-card" href="{{ url_for('routes.contacts') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">Контакты</p>
-              <p class="square-card__meta">Адреса и контакты проекта</p>
             </div>
           </a>
 
@@ -189,7 +161,7 @@
     </div>
   </div>
 
-  {% if is_staff %}
+  {% if is_admin %}
     <div class="card mt-16">
       <div class="card__body">
         <div class="row space-between">
