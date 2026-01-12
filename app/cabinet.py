@@ -7,10 +7,28 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 from .db import db, safe_commit
-from .models import Athlete, Feedback, Indicator, Measurement, MeasureSource, Team, User, ROLE_ADMIN, ROLE_COACH, ROLE_DOCTOR, ROLE_OPERATOR, ROLE_USER, SOURCE_CODE_MANUAL
+from .models import (
+    ALERT_LEVEL_HIGH,
+    ALERT_LEVEL_LOW,
+    ALERT_STATUS_OPEN,
+    Alert,
+    Athlete,
+    Feedback,
+    Indicator,
+    Measurement,
+    MeasureSource,
+    Team,
+    User,
+    ROLE_ADMIN,
+    ROLE_COACH,
+    ROLE_DOCTOR,
+    ROLE_OPERATOR,
+    ROLE_USER,
+    SOURCE_CODE_MANUAL,
+)
 from .auth import roles_required
 from .permissions import get_coach_team_ids, get_coach_teams, is_coach, is_staff, is_user
-from .utils import crumbs, parse_datetime, to_float
+from .utils import crumbs, is_out_of_range_value, parse_datetime, to_float
 
 bp = Blueprint("cabinet", __name__)
 
@@ -164,6 +182,20 @@ def measurement_new_post():
         comment=comment,
     )
     db.session.add(m)
+
+    try:
+        out, nmin, nmax, _personal = is_out_of_range_value(athlete.id, indicator.id, value)
+        if out:
+            level = ALERT_LEVEL_HIGH
+            if nmin is not None and value < float(nmin):
+                level = ALERT_LEVEL_LOW
+            elif nmax is not None and value > float(nmax):
+                level = ALERT_LEVEL_HIGH
+            alert = Alert(measurement=m, level=level, status=ALERT_STATUS_OPEN)
+            db.session.add(alert)
+    except Exception:
+        pass
+
     safe_commit()
 
     flash("Измерение добавлено.", "success")
