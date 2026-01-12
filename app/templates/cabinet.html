@@ -14,7 +14,7 @@
 
     <div class="row">
       {% if is_admin or is_coach or is_operator %}
-        <a class="btn btn--primary" href="{{ url_for('cabinet.measurement_new') }}">Внести измерение</a>
+        <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Внести измерение</a>
       {% endif %}
       <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Создать обращение</a>
     </div>
@@ -28,6 +28,9 @@
           <p class="card__subtitle">
             Команда: <b>{{ athlete_profile.team.name if athlete_profile.team else "не назначена" }}</b>
           </p>
+          <div class="row mt-12">
+            <a class="btn btn--primary" href="{{ url_for('routes.product', athlete_id=athlete_profile.id) }}">Мои показатели</a>
+          </div>
         {% else %}
           <p class="card__subtitle">
             Профиль спортсмена пока не создан. Обратитесь к тренеру для добавления в команду.
@@ -78,7 +81,13 @@
                       {% for u in team_members %}
                         <tr>
                           <td><b>{{ u.username }}</b></td>
-                          <td>{{ u.athlete.full_name if u.athlete else "—" }}</td>
+                          <td>
+                            {% if u.athlete %}
+                              <a href="{{ url_for('routes.product', athlete_id=u.athlete.id) }}">{{ u.athlete.full_name }}</a>
+                            {% else %}
+                              —
+                            {% endif %}
+                          </td>
                           <td style="text-align:right;">
                             <form method="post" action="{{ url_for('cabinet.team_remove_user') }}" style="display:inline;">
                               <input type="hidden" name="user_id" value="{{ u.id }}">
