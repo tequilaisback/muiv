@@ -37,106 +37,34 @@ bp = Blueprint("cabinet", __name__)
 @login_required
 def cabinet_home():
     """
-    Личный кабинет:
-    - мои последние внесённые измерения
-    - мои обращения/заметки
-    - (для staff) форма/модалка "внести измерение"
+    Личный кабинет: краткая карточка профиля.
     """
     bc = crumbs(("Главная", url_for("routes.index")), ("Личный кабинет", ""))
 
-    my_last = []
-    athlete_profile = None
-    doctor_recommendations = []
-    is_staff = is_staff(current_user)
-    is_user_role = is_user(current_user)
-    is_coach_role = is_coach(current_user)
+    role_labels = {
+        ROLE_ADMIN: "Администратор",
+        ROLE_DOCTOR: "Врач",
+        ROLE_COACH: "Тренер",
+        ROLE_OPERATOR: "Оператор",
+        ROLE_USER: "Спортсмен",
+    }
+    role_title = role_labels.get(getattr(current_user, "role", None), "—")
 
-    if is_user_role:
-        athlete_profile = getattr(current_user, "athlete", None)
-        if athlete_profile:
-            my_last = (
-                Measurement.query
-                .filter(Measurement.athlete_id == athlete_profile.id)
-                .order_by(Measurement.measured_at.desc())
-                .limit(10)
-                .all()
-            )
-
-            doctor_recommendations = (
-                Feedback.query
-                .join(Feedback.author)
-                .filter(Feedback.athlete_id == athlete_profile.id)
-                .filter(User.role == ROLE_DOCTOR)
-                .order_by(Feedback.created_at.desc())
-                .limit(10)
-                .all()
-            )
-    else:
-        my_last = (
-            Measurement.query
-            .filter(Measurement.created_by_id == current_user.id)
-            .order_by(Measurement.measured_at.desc())
-            .limit(10)
-            .all()
-        )
-
-    my_feedback = (
-        Feedback.query
-        .filter(Feedback.author_id == current_user.id)
-        .order_by(Feedback.created_at.desc())
-        .limit(10)
-        .all()
-    )
-
-    # Данные для модалки внесения (только staff)
-    athletes = []
-    indicators = []
-    if is_staff:
-        athletes_query = Athlete.query.filter_by(is_active=True)
-        if is_coach_role:
-            team_ids = get_coach_team_ids(current_user)
-            if team_ids:
-                athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
-        athletes = athletes_query.order_by(Athlete.full_name.asc()).all()
-        indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
-
-    # можно дергать ?modal=measure чтобы авт-открывать модалку
-    open_modal = (request.args.get("modal") == "measure")
-
-    coach_team = None
-    team_members = []
-    users_pool = []
-    if is_coach_role:
+    team_label = None
+    athlete_profile = getattr(current_user, "athlete", None)
+    if athlete_profile and athlete_profile.team:
+        team_label = athlete_profile.team.name
+    elif is_coach(current_user):
         coach_teams = get_coach_teams(current_user)
-        coach_team = coach_teams[0] if coach_teams else None
-        if coach_team:
-            team_members = (
-                User.query
-                .join(Athlete, Athlete.user_id == User.id)
-                .filter(User.role == ROLE_USER, Athlete.team_id == coach_team.id)
-                .order_by(User.username.asc())
-                .all()
-            )
-
-        users_pool = User.query.filter(User.role == ROLE_USER).order_by(User.username.asc()).all()
+        if coach_teams:
+            team_label = coach_teams[0].name
 
     return render_template(
         "cabinet.html",
         breadcrumbs=bc,
-        my_last_measurements=my_last,
-        my_feedback=my_feedback,
-        is_staff=is_staff,
-        is_user=is_user_role,
-        is_coach=is_coach_role,
         athlete_profile=athlete_profile,
-        doctor_recommendations=doctor_recommendations,
-        coach_team=coach_team,
-        team_members=team_members,
-        users_pool=users_pool,
-        athletes=athletes,
-        indicators=indicators,
-        open_modal=open_modal,
-        now_dt=datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+        role_title=role_title,
+        team_label=team_label,
     )
 
 
