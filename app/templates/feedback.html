@@ -1,28 +1,239 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/feedback.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Обращения и заметки — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Обращения и заметки</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Гость может оставить обращение. Сотрудники видят список, могут фильтровать и закрывать обращения.
+      </p>
+    </div>
+    <div class="row">
+      <a class="btn" href="{{ url_for('routes.index') }}">На главную</a>
+      {% if is_staff %}
+        <span class="badge badge--ok">Доступ сотрудника</span>
+      {% else %}
+        <span class="badge badge--warn">Публичная форма</span>
+      {% endif %}
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  <div class="grid grid--2 mt-16">
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Создать сообщение</h2>
+        <p class="card__subtitle">
+          {% if is_staff %}
+            Можно создать заметку/инцидент и привязать к спортсмену.
+          {% else %}
+            Оставьте обращение (без привязки к спортсмену).
+          {% endif %}
+        </p>
 
-    {% block content %}{% endblock %}
-  </main>
+        <form class="form mt-12" method="post" action="{{ url_for('feedback.feedback_create') }}">
+          {% if is_staff %}
+            <div class="field">
+              <label>Тип</label>
+              <select name="kind">
+                <option value="request">Обращение</option>
+                <option value="note">Заметка</option>
+                <option value="incident">Инцидент</option>
+              </select>
+            </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+            <div class="field">
+              <label>Спортсмен (опционально)</label>
+              <select name="athlete_id">
+                <option value="">—</option>
+                {% for a in athletes %}
+                  <option value="{{ a.id }}">{{ a.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+          <div class="field">
+            <label>Тема</label>
+            <input class="input" name="title" required placeholder="Например: жалоба на самочувствие">
+          </div>
+
+          <div class="field">
+            <label>Сообщение</label>
+            <textarea name="message" required placeholder="Опишите проблему/наблюдение"></textarea>
+          </div>
+
+          <div class="row">
+            <button class="btn btn--primary" type="submit">Отправить</button>
+            <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Сбросить</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Список (для сотрудников)</h2>
+        <p class="card__subtitle">
+          {% if is_staff %}
+            Фильтры и просмотр записей. Можно закрыть обращение.
+          {% else %}
+            Доступно только сотрудникам (врач/тренер/админ/оператор).
+          {% endif %}
+        </p>
+
+        {% if is_staff %}
+          <form class="filters mt-12" method="get" action="{{ url_for('feedback.feedback_home') }}" data-autosubmit="1">
+            <div class="field">
+              <label>Спортсмен</label>
+              <select name="athlete_id">
+                <option value="">Все</option>
+                {% for a in athletes %}
+                  <option value="{{ a.id }}" {% if filters.athlete_id==a.id %}selected{% endif %}>{{ a.full_name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field field--sm">
+              <label>Тип</label>
+              <select name="kind">
+                <option value="" {% if not filters.kind %}selected{% endif %}>Все</option>
+                <option value="request" {% if filters.kind=='request' %}selected{% endif %}>Обращение</option>
+                <option value="note" {% if filters.kind=='note' %}selected{% endif %}>Заметка</option>
+                <option value="incident" {% if filters.kind=='incident' %}selected{% endif %}>Инцидент</option>
+              </select>
+            </div>
+
+            <div class="field field--sm">
+              <label>Статус</label>
+              <select name="status">
+                <option value="" {% if not filters.status %}selected{% endif %}>Все</option>
+                <option value="open" {% if filters.status=='open' %}selected{% endif %}>Открыто</option>
+                <option value="closed" {% if filters.status=='closed' %}selected{% endif %}>Закрыто</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Поиск</label>
+              <input class="input" name="q" value="{{ filters.q }}" placeholder="тема/текст">
+            </div>
+
+            <div class="field field--sm">
+              <label>На страницу</label>
+              <select name="per_page">
+                {% for n in [10,15,25,50,100] %}
+                  <option value="{{ n }}" {% if pagination.per_page==n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="actions">
+              <button class="btn" type="submit">Применить</button>
+            </div>
+          </form>
+
+          {% if items and items|length > 0 %}
+            <table class="table mt-16">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Тип</th>
+                  <th>Статус</th>
+                  <th>Тема</th>
+                  <th>Спортсмен</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for f in items %}
+                  <tr>
+                    <td>{{ f.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                      {% if f.kind == 'incident' %}
+                        <span class="badge badge--bad">Инцидент</span>
+                      {% elif f.kind == 'note' %}
+                        <span class="badge">Заметка</span>
+                      {% else %}
+                        <span class="badge badge--warn">Обращение</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if f.status == 'closed' %}
+                        <span class="badge badge--ok">Закрыто</span>
+                      {% else %}
+                        <span class="badge badge--warn">Открыто</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <b>{{ f.title }}</b>
+                      <div style="color: var(--muted); font-size: 12px;">
+                        {{ f.message[:140] }}{% if f.message and f.message|length > 140 %}…{% endif %}
+                      </div>
+                    </td>
+                    <td>
+                      {% if f.athlete %}
+                        <a href="{{ url_for('routes.product', athlete_id=f.athlete.id) }}">{{ f.athlete.full_name }}</a>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td style="text-align:right;">
+                      {% if f.status != 'closed' %}
+                        <form method="post" action="{{ url_for('feedback.feedback_close', fb_id=f.id) }}" style="display:inline;">
+                          <button class="btn btn--danger" type="submit" data-confirm="Закрыть обращение?">Закрыть</button>
+                        </form>
+                      {% else %}
+                        <span class="badge badge--ok">OK</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+
+            {% if pagination.pages > 1 %}
+              <div class="row mt-16 space-between">
+                <div style="color: var(--muted); font-size: 13px;">
+                  Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+                </div>
+                <div class="row">
+                  {% if pagination.has_prev %}
+                    <a class="btn" href="{{ url_for('feedback.feedback_home',
+                          page=pagination.prev_page,
+                          per_page=pagination.per_page,
+                          athlete_id=filters.athlete_id,
+                          kind=filters.kind,
+                          status=filters.status,
+                          q=filters.q
+                    ) }}">Назад</a>
+                  {% endif %}
+                  {% if pagination.has_next %}
+                    <a class="btn" href="{{ url_for('feedback.feedback_home',
+                          page=pagination.next_page,
+                          per_page=pagination.per_page,
+                          athlete_id=filters.athlete_id,
+                          kind=filters.kind,
+                          status=filters.status,
+                          q=filters.q
+                    ) }}">Вперёд</a>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          {% else %}
+            <p class="mt-16" style="margin:0; color: var(--muted);">Записей нет.</p>
+          {% endif %}
+        {% else %}
+          <div class="mt-16" style="color: var(--muted);">
+            Войдите под ролью сотрудника, чтобы видеть список и управлять статусами.
+            <div class="row mt-12">
+              <a class="btn btn--primary" href="{{ url_for('auth.login') }}">Войти</a>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
