@@ -6,28 +6,48 @@ from datetime import datetime
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
+from .auth import staff_required
 from .db import db, safe_commit
-from .models import Athlete, Feedback
-from .utils import crumbs, clamp_int, staff_required
+from .models import (
+    ALERT_STATUS_CLOSED,
+    ALERT_STATUS_OPEN,
+    FEEDBACK_KIND_INCIDENT,
+    FEEDBACK_KIND_NOTE,
+    FEEDBACK_KIND_REQUEST,
+    Athlete,
+    Feedback,
+)
+from .utils import crumbs, clamp_int
 
 bp = Blueprint("feedback", __name__)
+
+
+def _is_staff_user() -> bool:
+    return bool(
+        current_user.is_authenticated
+        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
+        and getattr(current_user, "is_active", True)
+    )
 
 
 @bp.get("/")
 def feedback_home():
     """
-    Страница обращений/заметок.
-    - Для гостей: можно оставить обращение (kind=request)
-    - Для сотрудников (admin/doctor/coach/operator): видно список + фильтры
+    Обращения/заметки.
+
+    - Гость / обычный пользователь: показываем только форму отправки обращения (kind=request)
+    - Staff (admin/doctor/coach/operator): дополнительно видит список + фильтры + может закрывать
     """
     bc = crumbs(("Главная", url_for("routes.index")), ("Обращения и заметки", ""))
 
     athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
 
-    # Фильтры (для просмотра списка)
+    is_staff = _is_staff_user()
+
+    # Фильтры списка (только staff)
     athlete_id = request.args.get("athlete_id", type=int)
-    kind = (request.args.get("kind") or "").strip() or None   # note/request/incident
-    status = (request.args.get("status") or "").strip() or None  # open/closed
+    kind = (request.args.get("kind") or "").strip() or None
+    status = (request.args.get("status") or "").strip() or None
     q = (request.args.get("q") or "").strip()
 
     page = clamp_int(request.args.get("page"), default=1, min_value=1, max_value=10_000)
@@ -36,12 +56,6 @@ def feedback_home():
     items = []
     total = 0
     pages = 1
-
-    # список показываем только персоналу (чтобы не светить внутренние заметки всем)
-    is_staff = bool(
-        current_user.is_authenticated
-        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
-    )
 
     if is_staff:
         query = Feedback.query.order_by(Feedback.created_at.desc())
@@ -53,7 +67,6 @@ def feedback_home():
         if status:
             query = query.filter(Feedback.status == status)
         if q:
-            # простой поиск по заголовку/тексту
             query = query.filter(
                 db.or_(
                     Feedback.title.ilike(f"%{q}%"),
@@ -93,31 +106,34 @@ def feedback_home():
 @bp.post("/")
 def feedback_create():
     """
-    Создание обращения/заметки.
-    Гость может создать только kind=request (обращение).
-    Персонал может создавать note/incident + привязку к спортсмену.
+    Создание записи feedback.
+
+    - Гость / обычный пользователь: только FEEDBACK_KIND_REQUEST, без привязки к спортсмену
+    - Staff: может создавать note/incident/request и (опционально) привязать к спортсмену
     """
     title = (request.form.get("title") or "").strip()
     message = (request.form.get("message") or "").strip()
-    athlete_id = request.form.get("athlete_id", type=int)
 
-    kind = (request.form.get("kind") or "request").strip()
-    status = "open"
+    athlete_id_raw = (request.form.get("athlete_id") or "").strip()
+    athlete_id = int(athlete_id_raw) if athlete_id_raw.isdigit() else None
+
+    kind = (request.form.get("kind") or FEEDBACK_KIND_REQUEST).strip()
+    status = ALERT_STATUS_OPEN
 
     if not title or not message:
         flash("Заполните тему и текст сообщения.", "warning")
         return redirect(url_for("feedback.feedback_home"))
 
-    # Определяем, кто создаёт и что ему разрешено
-    is_staff = bool(
-        current_user.is_authenticated
-        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
-    )
+    is_staff = _is_staff_user()
 
+    # Ограничения для гостя/обычного пользователя
     if not is_staff:
-        # для гостей — только обращения и без обязательной привязки к спортсмену
-        kind = "request"
+        kind = FEEDBACK_KIND_REQUEST
         athlete_id = None
+
+    # Валидация kind для staff (чтобы не прилетело что-то левое)
+    if is_staff and kind not in (FEEDBACK_KIND_REQUEST, FEEDBACK_KIND_NOTE, FEEDBACK_KIND_INCIDENT):
+        kind = FEEDBACK_KIND_NOTE
 
     athlete = None
     if athlete_id:
@@ -144,18 +160,25 @@ def feedback_create():
 
 @bp.get("/thanks")
 def thanks():
-    bc = crumbs(("Главная", url_for("routes.index")), ("Обращения и заметки", url_for("feedback.feedback_home")), ("Готово", ""))
+    bc = crumbs(
+        ("Главная", url_for("routes.index")),
+        ("Обращения и заметки", url_for("feedback.feedback_home")),
+        ("Готово", ""),
+    )
     return render_template("thanks.html", breadcrumbs=bc)
 
 
-# ---- опционально: закрытие обращения (для персонала) ----
 @bp.post("/<int:fb_id>/close")
 @staff_required
 def feedback_close(fb_id: int):
+    """
+    Закрытие обращения/заметки (только staff).
+    """
     fb = Feedback.query.get_or_404(fb_id)
-    fb.status = "closed"
+    fb.status = ALERT_STATUS_CLOSED
     fb.closed_at = datetime.utcnow()
     db.session.add(fb)
     safe_commit()
+
     flash("Обращение закрыто.", "info")
     return redirect(url_for("feedback.feedback_home"))
