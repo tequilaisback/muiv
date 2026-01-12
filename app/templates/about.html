@@ -1,34 +1,28 @@
-{# app/templates/about.html #}
-{% extends "base.html" %}
+{# app/templates/base.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Flask Portal{% endblock %}</title>
 
-{% block title %}О проекте{% endblock %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
 
-{% block content %}
-  <div class="card section">
-    <h1>О проекте</h1>
-    <p class="lead">
-      Это учебный веб-портал на <b>Python (Flask)</b> с базой данных <b>SQLite</b>.
-      Проект демонстрирует типовую корпоративную систему: роли пользователей, личный кабинет,
-      администрирование справочников и каталога, поиск и форма обратной связи.
-    </p>
+  {% include "partials/_nav.html" %}
 
-    <hr class="sep">
+  <main class="container">
+    {% include "partials/_breadcrumbs.html" %}
+    {% include "partials/_flash.html" %}
 
-    <h2>Ключевые функции</h2>
-    <ul>
-      <li>Авторизация и регистрация пользователей.</li>
-      <li>3 роли: пользователь / менеджер / администратор.</li>
-      <li>Каталог товаров, категории, акции и поиск.</li>
-      <li>Личный кабинет (профиль, смена данных).</li>
-      <li>Админ-панель: управление пользователями, категориями, товарами, сообщениями.</li>
-      <li>Хлебные крошки и навигация по разделам.</li>
-    </ul>
+    {% block content %}{% endblock %}
+  </main>
 
-    <hr class="sep">
+  <footer class="footer">
+    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
+  </footer>
 
-    <div class="row">
-      <a class="btn btn-primary" href="{{ url_for('main.catalog') }}">Перейти в каталог</a>
-      <a class="btn" href="{{ url_for('feedback.form') }}">Написать сообщение</a>
-    </div>
-  </div>
-{% endblock %}
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

@@ -1,78 +1,28 @@
-{# app/templates/product.html #}
-{% extends "base.html" %}
+{# app/templates/base.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Flask Portal{% endblock %}</title>
 
-{% block title %}{{ product.name }}{% endblock %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
 
-{% block content %}
-  <div class="card section">
-    <div class="row">
-      <h1 style="margin:0;">{{ product.name }}</h1>
-      <div class="right row">
-        <a class="btn btn-small" href="{{ url_for('main.catalog', category_id=product.category_id) }}">К категории</a>
-        <a class="btn btn-small" href="{{ url_for('main.catalog') }}">В каталог</a>
-      </div>
-    </div>
+  {% include "partials/_nav.html" %}
 
-    <p class="lead" style="margin-top:10px;">
-      Категория: <b>{{ category.name if category else "-" }}</b>
-      {% if product.is_featured %} · <span class="badge" style="position:static;">featured</span>{% endif %}
-    </p>
+  <main class="container">
+    {% include "partials/_breadcrumbs.html" %}
+    {% include "partials/_flash.html" %}
 
-    <div class="form-grid">
-      <div class="card section" style="margin:0;">
-        <div class="product-thumb" style="border-radius:12px; overflow:hidden;">
-          {% if product.discount_percent and product.discount_percent > 0 %}
-            <span class="badge badge-sale">-{{ product.discount_percent }}%</span>
-          {% endif %}
+    {% block content %}{% endblock %}
+  </main>
 
-          {% if product.image_filename %}
-            <img
-              src="{{ url_for('static', filename='img/products/' ~ product.image_filename) }}"
-              alt="{{ product.name }}"
-              style="width:100%;height:100%;object-fit:cover;display:block;"
-            >
-          {% else %}
-            <div class="product-meta" style="padding:0 14px;text-align:center;">
-              Нет изображения
-            </div>
-          {% endif %}
-        </div>
-      </div>
+  <footer class="footer">
+    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
+  </footer>
 
-      <div class="card section" style="margin:0;">
-        <h2 style="margin-top:0;">Описание</h2>
-        <p class="product-meta" style="white-space:pre-wrap;margin:0;">
-          {{ product.description if product.description else "Описание не задано." }}
-        </p>
-
-        <hr class="sep">
-
-        <h3>Цена</h3>
-        <div class="price">
-          {% if product.discount_percent and product.discount_percent > 0 %}
-            <span class="price-now">{{ "%.2f"|format(product.final_price) }} ₽</span>
-            <span class="price-old">{{ "%.2f"|format(product.price_value) }} ₽</span>
-          {% else %}
-            <span class="price-now">{{ "%.2f"|format(product.price_value) }} ₽</span>
-          {% endif %}
-        </div>
-
-        <hr class="sep">
-
-        <div class="row">
-          <a class="btn btn-primary" href="{{ url_for('feedback.form') }}">Задать вопрос</a>
-          {% if current_user and current_user.role in ['admin','manager'] %}
-            <a class="btn" href="{{ url_for('admin.products_list', q=product.name) }}">Найти в админке</a>
-          {% endif %}
-        </div>
-
-        {% if product.image_filename %}
-          <hr class="sep">
-          <p class="product-meta" style="margin:0;">
-            Файл изображения: <b>{{ product.image_filename }}</b>
-          </p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-{% endblock %}
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

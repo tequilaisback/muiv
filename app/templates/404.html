@@ -1,17 +1,28 @@
-{# app/templates/404.html #}
-{% extends "base.html" %}
+{# app/templates/base.html #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Flask Portal{% endblock %}</title>
 
-{% block title %}Страница не найдена{% endblock %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
 
-{% block content %}
-  <div class="card section">
-    <h1>404 — Страница не найдена</h1>
-    <p class="lead">
-      Такой страницы нет или она была удалена.
-    </p>
-    <div class="row">
-      <a class="btn btn-primary" href="{{ url_for('main.index') }}">На главную</a>
-      <a class="btn" href="{{ url_for('main.catalog') }}">Перейти в каталог</a>
-    </div>
-  </div>
-{% endblock %}
+  {% include "partials/_nav.html" %}
+
+  <main class="container">
+    {% include "partials/_breadcrumbs.html" %}
+    {% include "partials/_flash.html" %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
