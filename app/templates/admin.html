@@ -1,28 +1,1035 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/admin.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Администрирование — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Администрирование</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Управление справочниками, журналом измерений, пользователями и экспортом в 1С.
+      </p>
+    </div>
+    <div class="row">
+      <a class="btn" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
+      <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Экспорт в 1С (CSV)</a>
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  <div class="mt-16 card">
+    <div class="card__body">
+      <div class="row" style="gap:8px;">
+        <a class="btn {% if active_view=='dashboard' %}btn--primary{% endif %}" href="{{ url_for('admin.dashboard') }}">Сводка</a>
+        <a class="btn {% if active_view in ['measurements'] %}btn--primary{% endif %}" href="{{ url_for('admin.measurements') }}">Измерения</a>
+        <a class="btn {% if active_view in ['athletes','athletes_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.athletes') }}">Спортсмены</a>
+        <a class="btn {% if active_view in ['indicators','indicators_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.indicators') }}">Показатели</a>
+        <a class="btn {% if active_view=='teams' %}btn--primary{% endif %}" href="{{ url_for('admin.teams') }}">Команды</a>
+        <a class="btn {% if active_view=='indicator_categories' %}btn--primary{% endif %}" href="{{ url_for('admin.indicator_categories') }}">Категории</a>
+        <a class="btn {% if active_view=='export_1c' %}btn--primary{% endif %}" href="{{ url_for('admin.export_1c') }}">Экспорт</a>
+        {% if current_user.is_authenticated and current_user.has_role('admin') %}
+          <a class="btn {% if active_view=='users' %}btn--primary{% endif %}" href="{{ url_for('admin.users') }}">Пользователи</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 
-    {% block content %}{% endblock %}
-  </main>
+  {# -------------------- DASHBOARD -------------------- #}
+  {% if active_view == "dashboard" %}
+    <div class="grid grid--4 mt-16">
+      <div class="metric">
+        <div class="metric__label">Спортсмены</div>
+        <div class="metric__value">{{ stats.athletes }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Показатели</div>
+        <div class="metric__value">{{ stats.indicators }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Измерения</div>
+        <div class="metric__value">{{ stats.measurements }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Открытые обращения</div>
+        <div class="metric__value">{{ stats.open_feedback }}</div>
+        <div class="metric__accent"></div>
+      </div>
+    </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Последние выгрузки</h2>
+        <p class="card__subtitle">Журнал экспортов в 1С (CSV).</p>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+        {% if latest_exports and latest_exports|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Период</th>
+                <th>Строк</th>
+                <th>Файл</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for x in latest_exports %}
+                <tr>
+                  <td>{{ x.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    {% if x.period_from %}{{ x.period_from.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                    →
+                    {% if x.period_to %}{{ x.period_to.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                  </td>
+                  <td>{{ x.rows_count }}</td>
+                  <td>{{ x.filename or "—" }}</td>
+                  <td>{{ x.comment or "—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="color: var(--muted); margin:0;">Пока нет экспортов.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- TEAMS -------------------- #}
+  {% if active_view == "teams" %}
+    <div class="grid grid--2 mt-16">
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Добавить команду / группу</h2>
+          <form class="form mt-12" method="post" action="{{ url_for('admin.teams_create') }}">
+            <div class="field">
+              <label>Название</label>
+              <input class="input" name="name" placeholder="Например: Группа А" required>
+            </div>
+            <div class="field">
+              <label>Родитель (опционально)</label>
+              <select name="parent_id">
+                <option value="">—</option>
+                {% for p in parents %}
+                  <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Добавить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Список команд</h2>
+          <p class="card__subtitle">Удаление запрещено, если есть спортсмены или дочерние группы.</p>
+
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th>Родитель</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in items %}
+                <tr>
+                  <td>{{ t.name }}</td>
+                  <td>{{ t.parent.name if t.parent else "—" }}</td>
+                  <td style="text-align:right;">
+                    <form method="post" action="{{ url_for('admin.teams_delete', team_id=t.id) }}" style="display:inline;">
+                      <button class="btn btn--danger" data-confirm="Удалить команду '{{ t.name }}'?" type="submit">Удалить</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- INDICATOR CATEGORIES -------------------- #}
+  {% if active_view == "indicator_categories" %}
+    <div class="grid grid--2 mt-16">
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Добавить категорию показателей</h2>
+          <form class="form mt-12" method="post" action="{{ url_for('admin.indicator_categories_create') }}">
+            <div class="field">
+              <label>Название</label>
+              <input class="input" name="name" placeholder="Например: Кардио" required>
+            </div>
+            <div class="field">
+              <label>Родитель (опционально)</label>
+              <select name="parent_id">
+                <option value="">—</option>
+                {% for p in parents %}
+                  <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Добавить</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Список категорий</h2>
+          <p class="card__subtitle">Удаление запрещено, если есть подкатегории или показатели.</p>
+
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Категория</th>
+                <th>Родитель</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in items %}
+                <tr>
+                  <td>{{ c.name }}</td>
+                  <td>{{ c.parent.name if c.parent else "—" }}</td>
+                  <td style="text-align:right;">
+                    <form method="post" action="{{ url_for('admin.indicator_categories_delete', cat_id=c.id) }}" style="display:inline;">
+                      <button class="btn btn--danger" data-confirm="Удалить категорию '{{ c.name }}'?" type="submit">Удалить</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- ATHLETES LIST -------------------- #}
+  {% if active_view == "athletes" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <div class="row space-between">
+          <div>
+            <h2 class="card__title">Спортсмены</h2>
+            <p class="card__subtitle">Справочник спортсменов и их принадлежность к командам.</p>
+          </div>
+        </div>
+
+        <form class="filters mt-12" method="get" action="{{ url_for('admin.athletes') }}" data-autosubmit="1">
+          <div class="field">
+            <label>Поиск</label>
+            <input class="input" name="q" value="{{ filters.q }}" placeholder="ФИО спортсмена">
+          </div>
+          <div class="field field--sm">
+            <label>Команда</label>
+            <select name="team_id">
+              <option value="">Все</option>
+              {% for t in teams %}
+                <option value="{{ t.id }}" {% if filters.team_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>Статус</label>
+            <select name="active">
+              <option value="1" {% if filters.active=="1" %}selected{% endif %}>Активные</option>
+              <option value="0" {% if filters.active=="0" %}selected{% endif %}>Неактивные</option>
+              <option value="all" {% if filters.active=="all" %}selected{% endif %}>Все</option>
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>На страницу</label>
+            <select name="per_page">
+              {% for n in [10,20,50,100] %}
+                <option value="{{ n }}" {% if filters.per_page==n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">Применить</button>
+          </div>
+        </form>
+
+        <div class="grid grid--2 mt-16">
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Добавить спортсмена</h3>
+              <form class="form mt-12" method="post" action="{{ url_for('admin.athletes_create') }}">
+                <div class="field">
+                  <label>ФИО</label>
+                  <input class="input" name="full_name" required placeholder="Иванов Иван">
+                </div>
+                <div class="field">
+                  <label>Команда/группа</label>
+                  <select name="team_id">
+                    <option value="">—</option>
+                    {% for t in teams %}
+                      <option value="{{ t.id }}">{{ t.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Дата рождения (опционально)</label>
+                    <input class="input" type="date" name="birth_date">
+                  </div>
+                  <div class="field">
+                    <label>Пол (опционально)</label>
+                    <select name="gender">
+                      <option value="">—</option>
+                      <option value="M">M</option>
+                      <option value="F">F</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="field">
+                  <label>Примечание</label>
+                  <textarea name="notes" placeholder="Доп. сведения (опционально)"></textarea>
+                </div>
+                <div class="row">
+                  <label class="badge" style="cursor:pointer;">
+                    <input type="checkbox" name="is_active" value="1" checked style="margin-right:8px;">
+                    Активен
+                  </label>
+                  <button class="btn btn--primary" type="submit">Создать</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Список</h3>
+
+              <table class="table mt-12">
+                <thead>
+                  <tr>
+                    <th>ФИО</th>
+                    <th>Команда</th>
+                    <th>Статус</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for a in pagination.items %}
+                    <tr>
+                      <td>
+                        <a href="{{ url_for('routes.product', athlete_id=a.id) }}"><b>{{ a.full_name }}</b></a>
+                        {% if a.birth_date %}
+                          <div style="color: var(--muted); font-size: 12px;">{{ a.birth_date.strftime('%Y-%m-%d') }}</div>
+                        {% endif %}
+                      </td>
+                      <td>{{ a.team.name if a.team else "—" }}</td>
+                      <td>
+                        {% if a.is_active %}
+                          <span class="badge badge--ok">Активен</span>
+                        {% else %}
+                          <span class="badge badge--warn">Неактивен</span>
+                        {% endif %}
+                      </td>
+                      <td style="text-align:right;">
+                        <a class="btn" href="{{ url_for('admin.athletes_edit', athlete_id=a.id) }}">Редактировать</a>
+                        <form method="post" action="{{ url_for('admin.athletes_toggle', athlete_id=a.id) }}" style="display:inline;">
+                          <button class="btn btn--danger" type="submit">
+                            {% if a.is_active %}Отключить{% else %}Включить{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              {% if pagination.pages > 1 %}
+                <div class="row mt-16 space-between">
+                  <div style="color: var(--muted); font-size: 13px;">
+                    Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+                  </div>
+                  <div class="row">
+                    {% if pagination.has_prev %}
+                      <a class="btn" href="{{ url_for('admin.athletes', page=pagination.prev_page, per_page=pagination.per_page, q=filters.q, team_id=filters.team_id, active=filters.active) }}">Назад</a>
+                    {% endif %}
+                    {% if pagination.has_next %}
+                      <a class="btn" href="{{ url_for('admin.athletes', page=pagination.next_page, per_page=pagination.per_page, q=filters.q, team_id=filters.team_id, active=filters.active) }}">Вперёд</a>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- ATHLETES EDIT -------------------- #}
+  {% if active_view == "athletes_edit" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Редактирование спортсмена</h2>
+        <p class="card__subtitle">Обновите данные и сохраните изменения.</p>
+
+        <form class="form mt-12" method="post" action="{{ url_for('admin.athletes_edit_post', athlete_id=athlete.id) }}">
+          <div class="field">
+            <label>ФИО</label>
+            <input class="input" name="full_name" value="{{ athlete.full_name }}" required>
+          </div>
+          <div class="field">
+            <label>Команда/группа</label>
+            <select name="team_id">
+              <option value="">—</option>
+              {% for t in teams %}
+                <option value="{{ t.id }}" {% if athlete.team_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grid grid--2">
+            <div class="field">
+              <label>Дата рождения</label>
+              <input class="input" type="date" name="birth_date" value="{{ athlete.birth_date.isoformat() if athlete.birth_date else '' }}">
+            </div>
+            <div class="field">
+              <label>Пол</label>
+              <select name="gender">
+                <option value="" {% if not athlete.gender %}selected{% endif %}>—</option>
+                <option value="M" {% if athlete.gender=='M' %}selected{% endif %}>M</option>
+                <option value="F" {% if athlete.gender=='F' %}selected{% endif %}>F</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Примечание</label>
+            <textarea name="notes">{{ athlete.notes or "" }}</textarea>
+          </div>
+          <div class="row">
+            <label class="badge" style="cursor:pointer;">
+              <input type="checkbox" name="is_active" value="1" {% if athlete.is_active %}checked{% endif %} style="margin-right:8px;">
+              Активен
+            </label>
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+            <a class="btn" href="{{ url_for('admin.athletes') }}">Назад</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- INDICATORS LIST -------------------- #}
+  {% if active_view == "indicators" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <div class="row space-between">
+          <div>
+            <h2 class="card__title">Показатели</h2>
+            <p class="card__subtitle">Справочник показателей и диапазоны нормы.</p>
+          </div>
+        </div>
+
+        <form class="filters mt-12" method="get" action="{{ url_for('admin.indicators') }}" data-autosubmit="1">
+          <div class="field">
+            <label>Поиск</label>
+            <input class="input" name="q" value="{{ filters.q }}" placeholder="Например: Пульс">
+          </div>
+          <div class="field field--sm">
+            <label>Категория</label>
+            <select name="category_id">
+              <option value="">Все</option>
+              {% for c in categories %}
+                <option value="{{ c.id }}" {% if filters.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>Статус</label>
+            <select name="active">
+              <option value="1" {% if filters.active=="1" %}selected{% endif %}>Активные</option>
+              <option value="0" {% if filters.active=="0" %}selected{% endif %}>Неактивные</option>
+              <option value="all" {% if filters.active=="all" %}selected{% endif %}>Все</option>
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>На страницу</label>
+            <select name="per_page">
+              {% for n in [10,20,50,100] %}
+                <option value="{{ n }}" {% if filters.per_page==n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">Применить</button>
+          </div>
+        </form>
+
+        <div class="grid grid--2 mt-16">
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Добавить показатель</h3>
+              <form class="form mt-12" method="post" action="{{ url_for('admin.indicators_create') }}">
+                <div class="field">
+                  <label>Название</label>
+                  <input class="input" name="name" required placeholder="Пульс">
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Ед. изм.</label>
+                    <input class="input" name="unit" placeholder="уд/мин">
+                  </div>
+                  <div class="field">
+                    <label>Категория</label>
+                    <select name="category_id">
+                      <option value="">—</option>
+                      {% for c in categories %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Норма min</label>
+                    <input class="input" name="norm_min" data-numeric="1" placeholder="50">
+                  </div>
+                  <div class="field">
+                    <label>Норма max</label>
+                    <input class="input" name="norm_max" data-numeric="1" placeholder="90">
+                  </div>
+                </div>
+                <div class="row">
+                  <label class="badge" style="cursor:pointer;">
+                    <input type="checkbox" name="is_active" value="1" checked style="margin-right:8px;">
+                    Активен
+                  </label>
+                  <button class="btn btn--primary" type="submit">Создать</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Список</h3>
+
+              <table class="table mt-12">
+                <thead>
+                  <tr>
+                    <th>Показатель</th>
+                    <th>Ед.</th>
+                    <th>Норма</th>
+                    <th>Статус</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for i in pagination.items %}
+                    <tr>
+                      <td><b>{{ i.name }}</b><div style="color:var(--muted);font-size:12px;">{{ i.category.name if i.category else "—" }}</div></td>
+                      <td>{{ i.unit or "—" }}</td>
+                      <td>
+                        {% if i.norm_min is not none or i.norm_max is not none %}
+                          {{ i.norm_min if i.norm_min is not none else "—" }} — {{ i.norm_max if i.norm_max is not none else "—" }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if i.is_active %}
+                          <span class="badge badge--ok">Активен</span>
+                        {% else %}
+                          <span class="badge badge--warn">Неактивен</span>
+                        {% endif %}
+                      </td>
+                      <td style="text-align:right;">
+                        <a class="btn" href="{{ url_for('admin.indicators_edit', indicator_id=i.id) }}">Редактировать</a>
+                        <form method="post" action="{{ url_for('admin.indicators_toggle', indicator_id=i.id) }}" style="display:inline;">
+                          <button class="btn btn--danger" type="submit">
+                            {% if i.is_active %}Отключить{% else %}Включить{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              {% if pagination.pages > 1 %}
+                <div class="row mt-16 space-between">
+                  <div style="color: var(--muted); font-size: 13px;">
+                    Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+                  </div>
+                  <div class="row">
+                    {% if pagination.has_prev %}
+                      <a class="btn" href="{{ url_for('admin.indicators', page=pagination.prev_page, per_page=pagination.per_page, q=filters.q, category_id=filters.category_id, active=filters.active) }}">Назад</a>
+                    {% endif %}
+                    {% if pagination.has_next %}
+                      <a class="btn" href="{{ url_for('admin.indicators', page=pagination.next_page, per_page=pagination.per_page, q=filters.q, category_id=filters.category_id, active=filters.active) }}">Вперёд</a>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- INDICATORS EDIT -------------------- #}
+  {% if active_view == "indicators_edit" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Редактирование показателя</h2>
+        <p class="card__subtitle">Обновите параметры и нормы.</p>
+
+        <form class="form mt-12" method="post" action="{{ url_for('admin.indicators_edit_post', indicator_id=indicator.id) }}">
+          <div class="field">
+            <label>Название</label>
+            <input class="input" name="name" value="{{ indicator.name }}" required>
+          </div>
+          <div class="grid grid--2">
+            <div class="field">
+              <label>Ед. изм.</label>
+              <input class="input" name="unit" value="{{ indicator.unit or '' }}">
+            </div>
+            <div class="field">
+              <label>Категория</label>
+              <select name="category_id">
+                <option value="">—</option>
+                {% for c in categories %}
+                  <option value="{{ c.id }}" {% if indicator.category_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid--2">
+            <div class="field">
+              <label>Норма min</label>
+              <input class="input" name="norm_min" data-numeric="1" value="{{ indicator.norm_min if indicator.norm_min is not none else '' }}">
+            </div>
+            <div class="field">
+              <label>Норма max</label>
+              <input class="input" name="norm_max" data-numeric="1" value="{{ indicator.norm_max if indicator.norm_max is not none else '' }}">
+            </div>
+          </div>
+          <div class="row">
+            <label class="badge" style="cursor:pointer;">
+              <input type="checkbox" name="is_active" value="1" {% if indicator.is_active %}checked{% endif %} style="margin-right:8px;">
+              Активен
+            </label>
+            <button class="btn btn--primary" type="submit">Сохранить</button>
+            <a class="btn" href="{{ url_for('admin.indicators') }}">Назад</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- MEASUREMENTS -------------------- #}
+  {% if active_view == "measurements" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Измерения</h2>
+        <p class="card__subtitle">Журнал измерений с фильтрами и ручным добавлением.</p>
+
+        <form class="filters mt-12" method="get" action="{{ url_for('admin.measurements') }}">
+          <div class="field">
+            <label>Спортсмен</label>
+            <select name="athlete_id">
+              <option value="">Все</option>
+              {% for a in athletes %}
+                <option value="{{ a.id }}" {% if filters.athlete_id==a.id %}selected{% endif %}>{{ a.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Показатель</label>
+            <select name="indicator_id">
+              <option value="">Все</option>
+              {% for i in indicators %}
+                <option value="{{ i.id }}" {% if filters.indicator_id==i.id %}selected{% endif %}>{{ i.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>Команда</label>
+            <select name="team_id">
+              <option value="">Все</option>
+              {% for t in teams %}
+                <option value="{{ t.id }}" {% if filters.team_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>С</label>
+            <input class="input" name="from" value="{{ filters.from }}" placeholder="YYYY-MM-DD HH:MM">
+          </div>
+          <div class="field field--sm">
+            <label>По</label>
+            <input class="input" name="to" value="{{ filters.to }}" placeholder="YYYY-MM-DD HH:MM">
+          </div>
+          <div class="field field--sm">
+            <label>Только отклонения</label>
+            <select name="out">
+              <option value="0" {% if filters.out=="0" %}selected{% endif %}>Нет</option>
+              <option value="1" {% if filters.out=="1" %}selected{% endif %}>Да</option>
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>На страницу</label>
+            <select name="per_page">
+              {% for n in [10,25,50,100] %}
+                <option value="{{ n }}" {% if filters.per_page==n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">Применить</button>
+          </div>
+        </form>
+
+        <div class="grid grid--2 mt-16">
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Добавить измерение</h3>
+              <form class="form mt-12" method="post" action="{{ url_for('admin.measurements_create') }}">
+                <div class="field">
+                  <label>Спортсмен</label>
+                  <select name="athlete_id" required>
+                    <option value="">—</option>
+                    {% for a in athletes %}
+                      <option value="{{ a.id }}">{{ a.full_name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Показатель</label>
+                  <select name="indicator_id" required>
+                    <option value="">—</option>
+                    {% for i in indicators %}
+                      <option value="{{ i.id }}">{{ i.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Значение</label>
+                    <input class="input" name="value" data-numeric="1" required placeholder="Напр. 62">
+                  </div>
+                  <div class="field">
+                    <label>Дата/время (опц.)</label>
+                    <input class="input" name="measured_at" placeholder="YYYY-MM-DD HH:MM">
+                  </div>
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Источник</label>
+                    <select name="source">
+                      {% for s in sources %}
+                        <option value="{{ s }}">{{ s }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Комментарий</label>
+                    <input class="input" name="comment" placeholder="опционально">
+                  </div>
+                </div>
+                <div class="row">
+                  <button class="btn btn--primary" type="submit">Добавить</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Список</h3>
+
+              <table class="table mt-12">
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Спортсмен</th>
+                    <th>Показатель</th>
+                    <th>Значение</th>
+                    <th>Статус</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for m in pagination.items %}
+                    {% set is_bad = (m.indicator and ((m.indicator.norm_min is not none and m.value < m.indicator.norm_min) or (m.indicator.norm_max is not none and m.value > m.indicator.norm_max))) %}
+                    <tr>
+                      <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                      <td><a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}">{{ m.athlete.full_name }}</a></td>
+                      <td>{{ m.indicator.name }}</td>
+                      <td><b>{{ m.value }}</b> {{ m.indicator.unit or "" }}</td>
+                      <td>
+                        {% if is_bad %}
+                          <span class="badge badge--bad">Отклонение</span>
+                        {% else %}
+                          <span class="badge badge--ok">Норма</span>
+                        {% endif %}
+                      </td>
+                      <td style="text-align:right;">
+                        <form method="post" action="{{ url_for('admin.measurements_delete', measurement_id=m.id) }}" style="display:inline;">
+                          <button class="btn btn--danger" data-confirm="Удалить измерение?" type="submit">Удалить</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              {% if pagination.pages > 1 %}
+                <div class="row mt-16 space-between">
+                  <div style="color: var(--muted); font-size: 13px;">
+                    Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+                  </div>
+                  <div class="row">
+                    {% if pagination.has_prev %}
+                      <a class="btn" href="{{ url_for('admin.measurements', page=pagination.prev_page, per_page=pagination.per_page, athlete_id=filters.athlete_id, indicator_id=filters.indicator_id, team_id=filters.team_id, from=filters.from, to=filters.to, out=filters.out) }}">Назад</a>
+                    {% endif %}
+                    {% if pagination.has_next %}
+                      <a class="btn" href="{{ url_for('admin.measurements', page=pagination.next_page, per_page=pagination.per_page, athlete_id=filters.athlete_id, indicator_id=filters.indicator_id, team_id=filters.team_id, from=filters.from, to=filters.to, out=filters.out) }}">Вперёд</a>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- EXPORT 1C -------------------- #}
+  {% if active_view == "export_1c" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Экспорт в 1С (CSV)</h2>
+        <p class="card__subtitle">
+          Формируется файл CSV для загрузки обработкой 1С. Колонки: <b>Date consultation</b>, <b>Student name</b>, <b>Group name</b>.
+        </p>
+
+        <form class="filters mt-12" method="post" action="{{ url_for('admin.export_1c_post') }}">
+          <div class="field">
+            <label>Спортсмен</label>
+            <select name="athlete_id">
+              <option value="">Все</option>
+              {% for a in athletes %}
+                <option value="{{ a.id }}" {% if filters.athlete_id==a.id %}selected{% endif %}>{{ a.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Показатель</label>
+            <select name="indicator_id">
+              <option value="">Все</option>
+              {% for i in indicators %}
+                <option value="{{ i.id }}" {% if filters.indicator_id==i.id %}selected{% endif %}>{{ i.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>Команда</label>
+            <select name="team_id">
+              <option value="">Все</option>
+              {% for t in teams %}
+                <option value="{{ t.id }}" {% if filters.team_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>С</label>
+            <input class="input" name="from" value="{{ filters.from }}" placeholder="YYYY-MM-DD HH:MM">
+          </div>
+          <div class="field field--sm">
+            <label>По</label>
+            <input class="input" name="to" value="{{ filters.to }}" placeholder="YYYY-MM-DD HH:MM">
+          </div>
+          <div class="field field--sm">
+            <label>Только отклонения</label>
+            <select name="out">
+              <option value="0" {% if filters.out=="0" %}selected{% endif %}>Нет</option>
+              <option value="1" {% if filters.out=="1" %}selected{% endif %}>Да</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn btn--primary" type="submit">Скачать CSV</button>
+          </div>
+        </form>
+
+        <div class="card mt-16">
+          <div class="card__body">
+            <h3 class="card__title">Подсказка по импорту в 1С</h3>
+            <p class="card__subtitle" style="margin-top:8px;">
+              В 1С выберите обработку импорта → укажите CSV → нажмите «Загрузить данные». Журнал заполнится автоматически.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# -------------------- USERS (ADMIN ONLY) -------------------- #}
+  {% if active_view == "users" %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Пользователи</h2>
+        <p class="card__subtitle">Создание пользователей, назначение ролей и управление активностью.</p>
+
+        <form class="filters mt-12" method="get" action="{{ url_for('admin.users') }}" data-autosubmit="1">
+          <div class="field">
+            <label>Поиск</label>
+            <input class="input" name="q" value="{{ filters.q }}" placeholder="логин или email">
+          </div>
+          <div class="field field--sm">
+            <label>Роль</label>
+            <select name="role">
+              <option value="">Все</option>
+              {% for r in roles %}
+                <option value="{{ r }}" {% if filters.role==r %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>Статус</label>
+            <select name="active">
+              <option value="1" {% if filters.active=="1" %}selected{% endif %}>Активные</option>
+              <option value="0" {% if filters.active=="0" %}selected{% endif %}>Неактивные</option>
+              <option value="all" {% if filters.active=="all" %}selected{% endif %}>Все</option>
+            </select>
+          </div>
+          <div class="field field--sm">
+            <label>На страницу</label>
+            <select name="per_page">
+              {% for n in [10,20,50,100] %}
+                <option value="{{ n }}" {% if filters.per_page==n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">Применить</button>
+          </div>
+        </form>
+
+        <div class="grid grid--2 mt-16">
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Создать пользователя</h3>
+              <form class="form mt-12" method="post" action="{{ url_for('admin.users_create') }}">
+                <div class="field">
+                  <label>Логин</label>
+                  <input class="input" name="username" required placeholder="например: trainer1">
+                </div>
+                <div class="field">
+                  <label>Email (опционально)</label>
+                  <input class="input" name="email" placeholder="trainer1@example.com">
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label>Пароль</label>
+                    <input class="input" name="password" type="password" required placeholder="минимум 6 символов">
+                  </div>
+                  <div class="field">
+                    <label>Роль</label>
+                    <select name="role">
+                      {% for r in roles %}
+                        <option value="{{ r }}">{{ r }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="row">
+                  <button class="btn btn--primary" type="submit">Создать</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__body">
+              <h3 class="card__title">Список</h3>
+              <table class="table mt-12">
+                <thead>
+                  <tr>
+                    <th>Логин</th>
+                    <th>Email</th>
+                    <th>Роль</th>
+                    <th>Статус</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in pagination.items %}
+                    <tr>
+                      <td><b>{{ u.username }}</b></td>
+                      <td>{{ u.email or "—" }}</td>
+                      <td>
+                        <form method="post" action="{{ url_for('admin.users_set_role', user_id=u.id) }}" class="row" style="gap:8px; flex-wrap:nowrap;">
+                          <select name="role">
+                            {% for r in roles %}
+                              <option value="{{ r }}" {% if u.role==r %}selected{% endif %}>{{ r }}</option>
+                            {% endfor %}
+                          </select>
+                          <button class="btn" type="submit">Ок</button>
+                        </form>
+                      </td>
+                      <td>
+                        {% if u.is_active %}
+                          <span class="badge badge--ok">Активен</span>
+                        {% else %}
+                          <span class="badge badge--warn">Неактивен</span>
+                        {% endif %}
+                      </td>
+                      <td style="text-align:right;">
+                        <form method="post" action="{{ url_for('admin.users_toggle', user_id=u.id) }}" style="display:inline;">
+                          <button class="btn btn--danger" type="submit"
+                                  {% if current_user.id==u.id %}data-tip="Самого себя отключать нельзя"{% endif %}>
+                            {% if u.is_active %}Отключить{% else %}Включить{% endif %}
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              {% if pagination.pages > 1 %}
+                <div class="row mt-16 space-between">
+                  <div style="color: var(--muted); font-size: 13px;">
+                    Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+                  </div>
+                  <div class="row">
+                    {% if pagination.has_prev %}
+                      <a class="btn" href="{{ url_for('admin.users', page=pagination.prev_page, per_page=pagination.per_page, q=filters.q, role=filters.role, active=filters.active) }}">Назад</a>
+                    {% endif %}
+                    {% if pagination.has_next %}
+                      <a class="btn" href="{{ url_for('admin.users', page=pagination.next_page, per_page=pagination.per_page, q=filters.q, role=filters.role, active=filters.active) }}">Вперёд</a>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
