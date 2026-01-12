@@ -1,28 +1,30 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/thanks.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Готово — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="card">
+    <div class="card__body">
+      <h1 class="card__title">Спасибо!</h1>
+      <p class="card__subtitle">
+        Сообщение сохранено. Если требуется, сотрудник рассмотрит обращение и отметит его как закрытое.
+      </p>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+      <div class="row mt-16">
+        <a class="btn btn--primary" href="{{ url_for('routes.index') }}">На главную</a>
+        <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
+        <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Ещё обращение</a>
+      </div>
 
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
-
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+      <div class="card mt-16">
+        <div class="card__body">
+          <h2 class="card__title">Что дальше (для демонстрации)</h2>
+          <p class="card__subtitle" style="margin-top:10px;">
+            Покажите преподавателю цепочку: внесение измерений → список отклонений → экспорт CSV → импорт в 1С (журнал).
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
