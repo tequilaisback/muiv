@@ -47,7 +47,7 @@ def create_app() -> Flask:
     def inject_globals():
         return {
             "APP_TITLE": app.config.get("APP_TITLE", "Мониторинг спортсменов"),
-            "CURRENT_USER": current_user,  # иногда удобно в шаблонах (опционально)
+            "CURRENT_USER": current_user,  # опционально
         }
 
     # error handlers
@@ -57,12 +57,11 @@ def create_app() -> Flask:
 
     @app.errorhandler(403)
     def forbidden(_e):
-        return render_template("403.html"), 403
+        return render_template("404.html"), 403
 
     @app.errorhandler(500)
     def server_error(_e):
-        # в debug пусть Flask показывает трейс, но шаблон тоже полезен
-        return render_template("500.html"), 500
+        return render_template("404.html"), 500
 
     # create DB + seed (учебный проект)
     with app.app_context():
@@ -71,7 +70,6 @@ def create_app() -> Flask:
             from .seed import seed_db
             seed_db()
         except Exception:
-            # seed не должен "ронять" приложение в учебной сборке
             app.logger.exception("seed_db failed")
 
     return app
