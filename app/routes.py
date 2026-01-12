@@ -384,6 +384,7 @@ def product(athlete_id: int):
     )
 
     indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
+    selected_indicator_id = request.args.get("indicator_id", type=int)
     doctor_recommendations = (
         Feedback.query
         .join(Feedback.author)
@@ -413,5 +414,6 @@ def product(athlete_id: int):
         athlete=athlete,
         last_measurements=last_measurements,
         indicators=indicators,
+        selected_indicator_id=selected_indicator_id,
         doctor_recommendations=doctor_recommendations,
     )
