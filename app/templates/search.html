@@ -1,28 +1,125 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/search.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Поиск — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Поиск</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Поиск по спортсменам и показателям. Для подробностей откройте карточку спортсмена.
+      </p>
+    </div>
+    <div class="row">
+      <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
+      <a class="btn" href="{{ url_for('routes.categories') }}">Показатели</a>
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  <div class="card mt-16">
+    <div class="card__body">
+      <form class="filters" method="get" action="{{ url_for('routes.search') }}">
+        <div class="field" style="min-width: 340px;">
+          <label>Запрос</label>
+          <input class="input" name="q" value="{{ q }}" placeholder="Например: Иванов или Пульс" autofocus>
+        </div>
 
-    {% block content %}{% endblock %}
-  </main>
+        <div class="field field--sm">
+          <label>Раздел</label>
+          <select name="scope">
+            <option value="all" {% if scope=='all' %}selected{% endif %}>Все</option>
+            <option value="athletes" {% if scope=='athletes' %}selected{% endif %}>Спортсмены</option>
+            <option value="indicators" {% if scope=='indicators' %}selected{% endif %}>Показатели</option>
+          </select>
+        </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+        <div class="actions">
+          <button class="btn btn--primary" type="submit">Найти</button>
+          <a class="btn" href="{{ url_for('routes.search') }}">Сбросить</a>
+        </div>
+      </form>
+    </div>
+  </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+  {% if q and q|length >= 2 %}
+    <div class="grid grid--2 mt-16">
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Спортсмены</h2>
+          <p class="card__subtitle">Найдено: {{ athletes|length }}</p>
+
+          {% if athletes and athletes|length > 0 %}
+            <div class="grid grid--2 mt-12">
+              {% for a in athletes %}
+                <a class="square-card" href="{{ url_for('routes.product', athlete_id=a.id) }}">
+                  <div class="square-card__media"><span aria-hidden="true"></span></div>
+                  <div class="square-card__body">
+                    <p class="square-card__title">{{ a.full_name }}</p>
+                    <p class="square-card__meta">
+                      {{ a.team.name if a.team else "Команда: —" }}
+                      {% if a.is_active %} • Активен{% else %} • Неактивен{% endif %}
+                    </p>
+                  </div>
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="mt-12" style="margin:0; color: var(--muted);">
+              Ничего не найдено по спортсменам.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__body">
+          <h2 class="card__title">Показатели</h2>
+          <p class="card__subtitle">Найдено: {{ indicators|length }}</p>
+
+          {% if indicators and indicators|length > 0 %}
+            <table class="table mt-12">
+              <thead>
+                <tr>
+                  <th>Показатель</th>
+                  <th>Категория</th>
+                  <th>Ед.</th>
+                  <th>Норма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for i in indicators %}
+                  <tr>
+                    <td><b>{{ i.name }}</b></td>
+                    <td>{{ i.category.name if i.category else "—" }}</td>
+                    <td>{{ i.unit or "—" }}</td>
+                    <td>
+                      {% if i.norm_min is not none or i.norm_max is not none %}
+                        {{ i.norm_min if i.norm_min is not none else "—" }} — {{ i.norm_max if i.norm_max is not none else "—" }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="mt-12" style="margin:0; color: var(--muted);">
+              Ничего не найдено по показателям.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Подсказка</h2>
+        <p class="card__subtitle" style="margin-top:10px;">
+          Введите минимум 2 символа. Примеры запросов: <b>Иванов</b>, <b>пульс</b>, <b>кардио</b>.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
