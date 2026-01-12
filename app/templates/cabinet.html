@@ -13,30 +13,113 @@
     </div>
 
     <div class="row">
-      {% if is_staff %}
+      {% if is_admin or is_coach or is_operator %}
         <a class="btn btn--primary" href="{{ url_for('cabinet.measurement_new') }}">Внести измерение</a>
       {% endif %}
       <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Создать обращение</a>
     </div>
   </div>
 
-  {% if not is_staff %}
+  {% if is_user %}
     <div class="card mt-16">
       <div class="card__body">
-        <h2 class="card__title">Добавление измерений</h2>
-        <p class="card__subtitle">
-          Внесение показателей доступно только сотрудникам (врач/тренер/админ/оператор).
-        </p>
+        <h2 class="card__title">Мой профиль спортсмена</h2>
+        {% if athlete_profile %}
+          <p class="card__subtitle">
+            Команда: <b>{{ athlete_profile.team.name if athlete_profile.team else "не назначена" }}</b>
+          </p>
+        {% else %}
+          <p class="card__subtitle">
+            Профиль спортсмена пока не создан. Обратитесь к тренеру для добавления в команду.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 
-        <div class="mt-16">
-          <span class="badge">Тестовые учётки staff</span>
-          <div class="mt-8" style="color: var(--muted);">
-            <div><b>admin</b> / admin123</div>
-            <div><b>doctor</b> / doctor123</div>
-            <div><b>coach</b> / coach123</div>
-            <div><b>operator</b> / operator123</div>
+  {% if is_coach %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Моя команда</h2>
+        <p class="card__subtitle">Соберите команду из пользователей-спортсменов.</p>
+
+        {% if not coach_team %}
+          <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_create') }}">
+            <div class="field">
+              <label>Название команды</label>
+              <input class="input" name="name" required placeholder="Например: Команда тренера">
+            </div>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Создать команду</button>
+            </div>
+          </form>
+        {% else %}
+          <div class="row mt-12 space-between">
+            <div>
+              <span class="badge">Команда</span>
+              <div style="margin-top:6px; font-weight:900;">{{ coach_team.name }}</div>
+            </div>
           </div>
-        </div>
+
+          <div class="grid grid--2 mt-16">
+            <div class="card">
+              <div class="card__body">
+                <h3 class="card__title">Состав команды</h3>
+                {% if team_members and team_members|length > 0 %}
+                  <table class="table mt-12">
+                    <thead>
+                      <tr>
+                        <th>Пользователь</th>
+                        <th>Спортсмен</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for u in team_members %}
+                        <tr>
+                          <td><b>{{ u.username }}</b></td>
+                          <td>{{ u.athlete.full_name if u.athlete else "—" }}</td>
+                          <td style="text-align:right;">
+                            <form method="post" action="{{ url_for('cabinet.team_remove_user') }}" style="display:inline;">
+                              <input type="hidden" name="user_id" value="{{ u.id }}">
+                              <button class="btn btn--danger" type="submit" data-confirm="Удалить из команды?">Удалить</button>
+                            </form>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <p class="mt-12" style="margin:0; color: var(--muted);">В команде пока нет спортсменов.</p>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card__body">
+                <h3 class="card__title">Добавить спортсмена</h3>
+                <form class="form mt-12" method="post" action="{{ url_for('cabinet.team_add_user') }}">
+                  <div class="field">
+                    <label>Пользователь-спортсмен</label>
+                    <select name="user_id" required>
+                      <option value="">— выберите —</option>
+                      {% for u in users_pool %}
+                        <option value="{{ u.id }}">{{ u.username }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>ФИО (если профиля ещё нет)</label>
+                    <input class="input" name="full_name" placeholder="Иванов Иван">
+                  </div>
+                  <div class="row">
+                    <button class="btn btn--primary" type="submit">Добавить в команду</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endif %}
       </div>
     </div>
   {% endif %}
@@ -147,4 +230,36 @@
       </div>
     </div>
   </div>
+
+  {% if is_user %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Рекомендации врача</h2>
+        <p class="card__subtitle">Последние рекомендации, связанные с вашим профилем.</p>
+
+        {% if doctor_recommendations and doctor_recommendations|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Тема</th>
+                <th>Сообщение</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in doctor_recommendations %}
+                <tr>
+                  <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td><b>{{ r.title }}</b></td>
+                  <td>{{ r.message }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">Рекомендаций пока нет.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}
