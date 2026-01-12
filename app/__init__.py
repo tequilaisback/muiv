@@ -7,6 +7,7 @@ from flask_login import LoginManager, current_user
 from config import Config
 from .db import db, init_db
 from .models import User
+from .permissions import is_admin, is_coach, is_doctor, is_operator, is_staff, is_user
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -48,6 +49,13 @@ def create_app() -> Flask:
         return {
             "APP_TITLE": app.config.get("APP_TITLE", "Мониторинг спортсменов"),
             "CURRENT_USER": current_user,  # опционально
+            "is_admin": is_admin(current_user),
+            "is_doctor": is_doctor(current_user),
+            "is_coach": is_coach(current_user),
+            "is_operator": is_operator(current_user),
+            "is_user": is_user(current_user),
+            "is_staff": is_staff(current_user),
+            "is_authenticated": bool(getattr(current_user, "is_authenticated", False)),
         }
 
     # error handlers
