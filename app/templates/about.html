@@ -33,8 +33,14 @@
         </div>
 
         <div class="row mt-16">
-          <a class="btn btn--primary" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
-          <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
+          {% if is_staff %}
+            <a class="btn btn--primary" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
+            <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
+          {% elif is_user %}
+            <a class="btn btn--primary" href="{{ url_for('cabinet.cabinet_home') }}">Личный кабинет</a>
+          {% else %}
+            <a class="btn btn--primary" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
+          {% endif %}
         </div>
       </div>
     </div>
