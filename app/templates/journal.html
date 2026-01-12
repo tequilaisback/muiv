@@ -13,7 +13,7 @@
     </div>
     <div class="row">
       <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
-      {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+      {% if is_admin or is_coach or is_operator %}
         <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Добавить (через админку)</a>
       {% endif %}
     </div>
@@ -89,7 +89,7 @@
 
   <div class="card mt-16">
     <div class="card__body">
-      {% if pagination.items and pagination.items|length > 0 %}
+      {% if pagination["items"] and pagination["items"]|length > 0 %}
         <table class="table">
           <thead>
             <tr>
@@ -103,7 +103,7 @@
             </tr>
           </thead>
           <tbody>
-            {% for m in pagination.items %}
+            {% for m in pagination["items"] %}
               {% set nmin = m.indicator.norm_min %}
               {% set nmax = m.indicator.norm_max %}
               {% set is_bad = ((nmin is not none and m.value < nmin) or (nmax is not none and m.value > nmax)) %}
