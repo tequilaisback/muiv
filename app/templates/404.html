@@ -1,28 +1,21 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/404.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Страница не найдена — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="card">
+    <div class="card__body">
+      <h1 class="card__title">404 — страница не найдена</h1>
+      <p class="card__subtitle">
+        Похоже, такой страницы нет. Проверьте адрес или вернитесь на главную.
+      </p>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
-
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
-
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+      <div class="row mt-16">
+        <a class="btn btn--primary" href="{{ url_for('routes.index') }}">На главную</a>
+        <a class="btn" href="{{ url_for('routes.search') }}">Поиск</a>
+        <a class="btn btn--ghost" href="{{ url_for('routes.catalog') }}">Журнал измерений</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
