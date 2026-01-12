@@ -1,28 +1,179 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/offers.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Отклонения от нормы — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Отклонения от нормы</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Список измерений, которые выходят за пределы нормы (min/max) по выбранному показателю.
+      </p>
+    </div>
+    <div class="row">
+      <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
+      <a class="btn btn--primary" href="{{ url_for('routes.search') }}">Поиск</a>
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  <div class="card mt-16">
+    <div class="card__body">
+      <form class="filters" method="get" action="{{ url_for('routes.offers') }}">
+        <div class="field">
+          <label>Спортсмен</label>
+          <select name="athlete_id">
+            <option value="">Все</option>
+            {% for a in athletes %}
+              <option value="{{ a.id }}" {% if filters.athlete_id==a.id %}selected{% endif %}>{{ a.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-    {% block content %}{% endblock %}
-  </main>
+        <div class="field">
+          <label>Показатель</label>
+          <select name="indicator_id">
+            <option value="">Все</option>
+            {% for i in indicators %}
+              <option value="{{ i.id }}" {% if filters.indicator_id==i.id %}selected{% endif %}>{{ i.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+        <div class="field field--sm">
+          <label>Команда</label>
+          <select name="team_id">
+            <option value="">Все</option>
+            {% for t in teams %}
+              <option value="{{ t.id }}" {% if filters.team_id==t.id %}selected{% endif %}>{{ t.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+        <div class="field field--sm">
+          <label>С</label>
+          <input class="input" name="from" value="{{ filters.from }}" placeholder="YYYY-MM-DD HH:MM">
+        </div>
+
+        <div class="field field--sm">
+          <label>По</label>
+          <input class="input" name="to" value="{{ filters.to }}" placeholder="YYYY-MM-DD HH:MM">
+        </div>
+
+        <div class="field field--sm">
+          <label>На страницу</label>
+          <select name="per_page">
+            {% for n in [10,20,50,100,200] %}
+              <option value="{{ n }}" {% if filters.per_page==n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn--primary" type="submit">Показать</button>
+          <a class="btn" href="{{ url_for('routes.offers') }}">Сбросить</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      {% if pagination.items and pagination.items|length > 0 %}
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Команда</th>
+              <th>Спортсмен</th>
+              <th>Показатель</th>
+              <th>Значение</th>
+              <th>Норма</th>
+              <th>Причина</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in pagination.items %}
+              {% set nmin = m.indicator.norm_min %}
+              {% set nmax = m.indicator.norm_max %}
+              {% set low = (nmin is not none and m.value < nmin) %}
+              {% set high = (nmax is not none and m.value > nmax) %}
+              <tr>
+                <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ m.athlete.team.name if m.athlete.team else "—" }}</td>
+                <td>
+                  <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                </td>
+                <td>{{ m.indicator.name }}</td>
+                <td><b>{{ m.value }}</b> {{ m.indicator.unit or "" }}</td>
+                <td>
+                  {% if nmin is not none or nmax is not none %}
+                    {{ nmin if nmin is not none else "—" }} — {{ nmax if nmax is not none else "—" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td>
+                  {% if low %}
+                    <span class="badge badge--bad">Ниже нормы</span>
+                  {% elif high %}
+                    <span class="badge badge--bad">Выше нормы</span>
+                  {% else %}
+                    <span class="badge badge--warn">Вне диапазона</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="row mt-16 space-between">
+          <div style="color: var(--muted); font-size: 13px;">
+            Всего: {{ pagination.total }} • Стр: {{ pagination.page }}/{{ pagination.pages }}
+          </div>
+
+          <div class="row">
+            {% if pagination.has_prev %}
+              <a class="btn" href="{{ url_for('routes.offers',
+                    page=pagination.prev_page,
+                    per_page=pagination.per_page,
+                    athlete_id=filters.athlete_id,
+                    indicator_id=filters.indicator_id,
+                    team_id=filters.team_id,
+                    from=filters.from,
+                    to=filters.to
+              ) }}">Назад</a>
+            {% endif %}
+
+            {% if pagination.has_next %}
+              <a class="btn" href="{{ url_for('routes.offers',
+                    page=pagination.next_page,
+                    per_page=pagination.per_page,
+                    athlete_id=filters.athlete_id,
+                    indicator_id=filters.indicator_id,
+                    team_id=filters.team_id,
+                    from=filters.from,
+                    to=filters.to
+              ) }}">Вперёд</a>
+            {% endif %}
+          </div>
+        </div>
+      {% else %}
+        <p style="margin:0; color: var(--muted);">
+          Отклонений не найдено по выбранным параметрам.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Что делать с отклонениями</h2>
+      <p class="card__subtitle" style="margin-top:10px;">
+        В учебном проекте следующий шаг — зафиксировать наблюдение/рекомендацию в разделе
+        <a href="{{ url_for('feedback.feedback_home') }}"><b>“Обращения и заметки”</b></a>,
+        либо выгрузить данные в 1С через админку для ведения журнала.
+      </p>
+    </div>
+  </div>
+{% endblock %}
