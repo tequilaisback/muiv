@@ -7,7 +7,7 @@ import json
 from datetime import datetime, date
 from typing import Optional
 
-from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy.orm import aliased
 from werkzeug.security import generate_password_hash
@@ -308,59 +308,19 @@ def teams_delete(team_id: int):
 @bp.get("/indicator-categories")
 @operator_required
 def indicator_categories():
-    bc = crumbs(
-        ("Главная", url_for("routes.index")),
-        ("Администрирование", url_for("admin.dashboard")),
-        ("Категории показателей", ""),
-    )
-
-    items = IndicatorCategory.query.order_by(IndicatorCategory.name.asc()).all()
-    parents = IndicatorCategory.query.order_by(IndicatorCategory.name.asc()).all()
-
-    ctx = _common_admin_context("indicator_categories")
-    ctx.update({"breadcrumbs": bc, "items": items, "parents": parents})
-    return render_template("admin.html", **ctx)
+    abort(404)
 
 
 @bp.post("/indicator-categories")
 @operator_required
 def indicator_categories_create():
-    name = (request.form.get("name") or "").strip()
-    parent_id = request.form.get("parent_id", type=int)
-
-    if not name:
-        flash("Название категории обязательно.", "warning")
-        return redirect(url_for("admin.indicator_categories"))
-
-    if IndicatorCategory.query.filter_by(name=name).first():
-        flash("Категория с таким названием уже существует.", "danger")
-        return redirect(url_for("admin.indicator_categories"))
-
-    parent = IndicatorCategory.query.get(parent_id) if parent_id else None
-    item = IndicatorCategory(name=name, parent=parent)
-    db.session.add(item)
-    safe_commit()
-    _log_action("create", "indicator_category", item.id, {"name": name, "parent_id": parent_id})
-    flash("Категория добавлена.", "success")
-    return redirect(url_for("admin.indicator_categories"))
+    abort(404)
 
 
 @bp.post("/indicator-categories/<int:cat_id>/delete")
 @operator_required
 def indicator_categories_delete(cat_id: int):
-    item = IndicatorCategory.query.get_or_404(cat_id)
-
-    has_children = IndicatorCategory.query.filter_by(parent_id=item.id).first() is not None
-    has_indicators = Indicator.query.filter_by(category_id=item.id).first() is not None
-    if has_children or has_indicators:
-        flash("Нельзя удалить: есть подкатегории или показатели.", "warning")
-        return redirect(url_for("admin.indicator_categories"))
-
-    db.session.delete(item)
-    safe_commit()
-    _log_action("delete", "indicator_category", cat_id, {"name": item.name})
-    flash("Категория удалена.", "info")
-    return redirect(url_for("admin.indicator_categories"))
+    abort(404)
 
 
 # -----------------------------
@@ -509,84 +469,19 @@ def athletes_toggle(athlete_id: int):
 @bp.get("/indicators")
 @operator_required
 def indicators():
-    bc = crumbs(
-        ("Главная", url_for("routes.index")),
-        ("Администрирование", url_for("admin.dashboard")),
-        ("Показатели", ""),
-    )
-
-    q = (request.args.get("q") or "").strip()
-    category_id = request.args.get("category_id", type=int)
-    active = request.args.get("active", "1")  # "1"/"0"/"all"
-
-    page = clamp_int(request.args.get("page"), default=1, min_value=1, max_value=10_000)
-    per_page = clamp_int(request.args.get("per_page"), default=20, min_value=5, max_value=200)
-
-    query = Indicator.query.outerjoin(Indicator.category).order_by(Indicator.name.asc())
-    if q:
-        query = query.filter(Indicator.name.ilike(f"%{q}%"))
-    if category_id:
-        query = query.filter(Indicator.category_id == category_id)
-    if active == "1":
-        query = query.filter(Indicator.is_active.is_(True))
-    elif active == "0":
-        query = query.filter(Indicator.is_active.is_(False))
-
-    pagination = simple_paginate(query, page=page, per_page=per_page)
-    cats = IndicatorCategory.query.order_by(IndicatorCategory.name.asc()).all()
-
-    ctx = _common_admin_context("indicators")
-    ctx.update(
-        {
-            "breadcrumbs": bc,
-            "pagination": pagination,
-            "categories": cats,
-            "filters": {"q": q, "category_id": category_id, "active": active, "per_page": per_page},
-        }
-    )
-    return render_template("admin.html", **ctx)
+    abort(404)
 
 
 @bp.post("/indicators")
 @operator_required
 def indicators_create():
-    name = (request.form.get("name") or "").strip()
-    unit = (request.form.get("unit") or "").strip() or None
-    category_id = request.form.get("category_id", type=int)
-    norm_min = to_float(request.form.get("norm_min"))
-    norm_max = to_float(request.form.get("norm_max"))
-    is_active = _bool_from_form(request.form.get("is_active") or "1")
-
-    if not name:
-        flash("Название показателя обязательно.", "warning")
-        return redirect(url_for("admin.indicators"))
-
-    cat = IndicatorCategory.query.get(category_id) if category_id else None
-    ind = Indicator(
-        name=name,
-        unit=unit,
-        category=cat,
-        norm_min=norm_min,
-        norm_max=norm_max,
-        is_active=is_active,
-    )
-    db.session.add(ind)
-    safe_commit()
-    _log_action("create", "indicator", ind.id, {"name": name, "category_id": category_id})
-    flash("Показатель добавлен.", "success")
-    return redirect(url_for("admin.indicators"))
+    abort(404)
 
 
 @bp.post("/indicators/<int:indicator_id>/toggle")
 @operator_required
 def indicators_toggle(indicator_id: int):
-    ind = Indicator.query.get_or_404(indicator_id)
-    ind.is_active = not ind.is_active
-    db.session.add(ind)
-    safe_commit()
-    _log_action("update", "indicator", indicator_id, {"is_active": ind.is_active})
-    flash("Статус показателя изменён.", "info")
-    return redirect(url_for("admin.indicators"))
+    abort(404)
 
 
 # -----------------------------
