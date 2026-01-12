@@ -1,28 +1,103 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/categories.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Показатели и нормы — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Показатели и нормы</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Справочник показателей, единицы измерения и диапазоны нормы (min/max).
+      </p>
+    </div>
+    <div class="row">
+      {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+        <a class="btn btn--primary" href="{{ url_for('admin.indicators') }}">Управление</a>
+      {% endif %}
+      <a class="btn" href="{{ url_for('routes.search') }}">Поиск</a>
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  <div class="grid grid--2 mt-16">
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Категории</h2>
+        <p class="card__subtitle">Группировка показателей (допускается иерархия).</p>
 
-    {% block content %}{% endblock %}
-  </main>
+        {% if categories and categories|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Категория</th>
+                <th>Родитель</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in categories %}
+                <tr>
+                  <td><b>{{ c.name }}</b></td>
+                  <td>{{ c.parent.name if c.parent else "—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">
+            Категории пока не заполнены.
+          </p>
+        {% endif %}
+      </div>
+    </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Показатели</h2>
+        <p class="card__subtitle">Список активных показателей, нормы и единицы.</p>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+        {% if indicators and indicators|length > 0 %}
+          <table class="table mt-12">
+            <thead>
+              <tr>
+                <th>Показатель</th>
+                <th>Категория</th>
+                <th>Ед.</th>
+                <th>Норма</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in indicators %}
+                <tr>
+                  <td><b>{{ i.name }}</b></td>
+                  <td>{{ i.category.name if i.category else "—" }}</td>
+                  <td>{{ i.unit or "—" }}</td>
+                  <td>
+                    {% if i.norm_min is not none or i.norm_max is not none %}
+                      {{ i.norm_min if i.norm_min is not none else "—" }} — {{ i.norm_max if i.norm_max is not none else "—" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">
+            Показатели пока не заполнены.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Как интерпретируется “норма”</h2>
+      <p class="card__subtitle" style="margin-top:10px;">
+        Если для показателя задан диапазон <b>min–max</b>, то измерение считается отклонением,
+        когда значение меньше min или больше max. В интерфейсе такие записи выделяются красным.
+      </p>
+    </div>
+  </div>
+{% endblock %}
