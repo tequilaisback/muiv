@@ -142,6 +142,7 @@ def register_post():
         return redirect(url_for("routes.index"))
 
     username = (request.form.get("username") or "").strip()
+    full_name = (request.form.get("full_name") or "").strip()
     email = (request.form.get("email") or "").strip() or None
     password = request.form.get("password") or ""
     password2 = request.form.get("password2") or ""
@@ -149,6 +150,9 @@ def register_post():
     # минимальная валидация
     if len(username) < 3:
         flash("Логин должен быть не короче 3 символов.", "warning")
+        return render_template("register.html", next=request.form.get("next", "")), 400
+    if len(full_name) < 3:
+        flash("Укажите ФИО спортсмена.", "warning")
         return render_template("register.html", next=request.form.get("next", "")), 400
     if len(password) < 6:
         flash("Пароль должен быть не короче 6 символов.", "warning")
@@ -168,14 +172,14 @@ def register_post():
     user = User(
         username=username,
         email=email,
-        password_hash=generate_password_hash(password),
+        password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
         role=ROLE_USER,
         is_active=True,
     )
     db.session.add(user)
     db.session.flush()
 
-    athlete = Athlete(full_name=username, user=user, is_active=True)
+    athlete = Athlete(full_name=full_name or username, user=user, is_active=True)
     db.session.add(athlete)
     safe_commit()
 
