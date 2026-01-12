@@ -212,7 +212,7 @@ def catalog():
     bc = crumbs(("Главная", url_for("routes.index")), ("Журнал измерений", ""))
 
     return render_template(
-        "measurements.html",  # было: catalog.html
+        "journal.html",  # было: catalog.html
         breadcrumbs=bc,
         athletes=athletes,
         indicators=indicators,
@@ -273,7 +273,7 @@ def offers():
     bc = crumbs(("Главная", url_for("routes.index")), ("Отклонения от нормы", ""))
 
     return render_template(
-        "alerts.html",  # было: offers.html
+        "deviations.html",  # было: offers.html
         breadcrumbs=bc,
         athletes=athletes,
         indicators=indicators,
@@ -394,11 +394,18 @@ def product(athlete_id: int):
         .all()
     )
 
-    bc = crumbs(
-        ("Главная", url_for("routes.index")),
-        ("Журнал измерений", url_for("routes.catalog")),
-        (athlete.full_name, ""),
-    )
+    if is_user(current_user):
+        bc = crumbs(
+            ("Главная", url_for("routes.index")),
+            ("Личный кабинет", url_for("cabinet.cabinet_home")),
+            (athlete.full_name, ""),
+        )
+    else:
+        bc = crumbs(
+            ("Главная", url_for("routes.index")),
+            ("Журнал измерений", url_for("routes.catalog")),
+            (athlete.full_name, ""),
+        )
 
     return render_template(
         "athlete.html",  # было: product.html
