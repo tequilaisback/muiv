@@ -49,6 +49,7 @@ from .utils import (
     crumbs,
     clamp_int,
     get_period_from_request,
+    is_out_of_range_value,
     parse_datetime,
     simple_paginate,
     to_float,
@@ -806,6 +807,20 @@ def measurements_create():
         comment=comment,
     )
     db.session.add(m)
+
+    try:
+        out, nmin, nmax, _personal = is_out_of_range_value(athlete.id, indicator.id, value)
+        if out:
+            level = ALERT_LEVEL_HIGH
+            if nmin is not None and value < float(nmin):
+                level = ALERT_LEVEL_LOW
+            elif nmax is not None and value > float(nmax):
+                level = ALERT_LEVEL_HIGH
+            alert = Alert(measurement=m, level=level, status=ALERT_STATUS_OPEN)
+            db.session.add(alert)
+    except Exception:
+        pass
+
     safe_commit()
     _log_action("create", "measurement", m.id, {"athlete_id": athlete_id, "indicator_id": indicator_id, "source": source_code})
 
@@ -880,7 +895,7 @@ def alerts_close(alert_id: int):
     safe_commit()
     _log_action("update", "alert", alert_id, {"status": a.status})
     flash("Отклонение закрыто.", "info")
-    return redirect(url_for("admin.alerts"))
+    return redirect(request.referrer or url_for("routes.offers"))
 
 
 # -----------------------------
@@ -1059,7 +1074,7 @@ def users_create():
     u = User(
         username=username,
         email=email,
-        password_hash=generate_password_hash(password),
+        password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
         role=role,
         is_active=True,
     )
