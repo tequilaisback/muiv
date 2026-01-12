@@ -3,8 +3,7 @@
 
 {% block title %}{{ athlete.full_name }} — {{ APP_TITLE }}{% endblock %}
 
-{% set selected_indicator_id = request.args.get('indicator_id', type=int) %}
-{% set period = request.args.get('period', '') %}
+
 
 {% block content %}
   <div class="row space-between">
