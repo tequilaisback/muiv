@@ -1,28 +1,73 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/contacts.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Контакты — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="grid grid--2">
+    <div class="card">
+      <div class="card__body">
+        <h1 class="card__title">Контакты</h1>
+        <p class="card__subtitle">
+          Учебная система. Ниже — пример контактной информации для демонстрации раздела.
+        </p>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+        <div class="mt-16">
+          <span class="badge">Организация</span>
+          <p class="mt-8" style="margin:0; color: var(--muted);">
+            Спортивный клуб «Олимп» (демо)
+          </p>
+        </div>
 
-    {% block content %}{% endblock %}
-  </main>
+        <div class="mt-16">
+          <span class="badge">Email</span>
+          <p class="mt-8" style="margin:0;">
+            <a href="mailto:demo@example.com">demo@example.com</a>
+          </p>
+        </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+        <div class="mt-16">
+          <span class="badge">Телефон</span>
+          <p class="mt-8" style="margin:0;">
+            <a href="tel:+70000000000">+7 (000) 000-00-00</a>
+          </p>
+        </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+        <div class="mt-16">
+          <span class="badge">Адрес</span>
+          <p class="mt-8" style="margin:0; color: var(--muted);">
+            г. Москва, ул. Примерная, д. 1 (демо)
+          </p>
+        </div>
+
+        <div class="row mt-16">
+          <a class="btn btn--primary" href="{{ url_for('routes.index') }}">На главную</a>
+          <a class="btn" href="{{ url_for('routes.about') }}">О системе</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Обратная связь</h2>
+        <p class="card__subtitle">
+          Для вопросов и замечаний используйте раздел “Обращения и заметки”.
+        </p>
+
+        <div class="mt-16">
+          <a class="btn btn--primary" href="{{ url_for('feedback.feedback_home') }}">Перейти к обращениям</a>
+        </div>
+
+        <div class="card mt-16">
+          <div class="card__body">
+            <h3 class="card__title">Подсказка</h3>
+            <p class="card__subtitle" style="margin-top:10px;">
+              Если вы демонстрируете проект преподавателю, покажите:
+              журнал измерений → отклонения → экспорт CSV в 1С (в админке).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
