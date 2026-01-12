@@ -1,16 +1,17 @@
 {# app/templates/partials/_breadcrumbs.html #}
-
 {% if breadcrumbs %}
-  <nav class="breadcrumbs" aria-label="breadcrumb">
-    {% for item in breadcrumbs %}
-      {% if item.url %}
-        <a href="{{ item.url }}">{{ item.title }}</a>
-        {% if not loop.last %}
-          <span class="sep">/</span>
+  <div class="breadcrumbs">
+    <div class="container">
+      {% for item in breadcrumbs %}
+        {% if item.url %}
+          <a href="{{ item.url }}">{{ item.title }}</a>
+        {% else %}
+          <span>{{ item.title }}</span>
         {% endif %}
-      {% else %}
-        <span>{{ item.title }}</span>
-      {% endif %}
-    {% endfor %}
-  </nav>
+        {% if not loop.last %}
+          <span class="breadcrumbs__sep">/</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
 {% endif %}
