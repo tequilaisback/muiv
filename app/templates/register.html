@@ -16,6 +16,19 @@
           <input type="hidden" name="next" value="{{ next }}">
 
           <div class="field">
+            <label>ФИО</label>
+            <input
+              class="input"
+              name="full_name"
+              required
+              minlength="3"
+              autocomplete="name"
+              placeholder="Иванов Иван"
+              value="{{ request.form.get('full_name', '') }}"
+            >
+          </div>
+
+          <div class="field">
             <label>Логин</label>
             <input
               class="input"
