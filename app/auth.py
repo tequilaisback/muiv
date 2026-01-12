@@ -2,24 +2,74 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import wraps
+from typing import Callable, Iterable
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import db, safe_commit
-from .models import User, ROLE_USER
+from .models import (
+    User,
+    ROLE_ADMIN,
+    ROLE_COACH,
+    ROLE_DOCTOR,
+    ROLE_OPERATOR,
+    ROLE_USER,
+)
 from .utils import redirect_next
 
 bp = Blueprint("auth", __name__)
 
 
+# -------------------------
+# Декораторы доступа по ролям
+# -------------------------
+def roles_required(*roles: str) -> Callable:
+    """
+    Пропускает только авторизованных пользователей с одной из ролей.
+    Иначе -> 403.
+
+    Пример:
+        @roles_required(ROLE_ADMIN, ROLE_DOCTOR)
+        def view(): ...
+    """
+    allowed = set(roles)
+
+    def decorator(fn: Callable) -> Callable:
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                # login_required редиректит на login, но этот декоратор может использоваться без него
+                return redirect(url_for("auth.login", next=request.full_path))
+            if not getattr(current_user, "is_active", True):
+                abort(403)
+            if not getattr(current_user, "has_role", None) or not current_user.has_role(*allowed):
+                abort(403)
+            return fn(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def staff_required(fn: Callable) -> Callable:
+    """
+    Staff = admin/doctor/coach/operator.
+    Удобно для админки/журнала/внесения измерений.
+    """
+    return roles_required(ROLE_ADMIN, ROLE_DOCTOR, ROLE_COACH, ROLE_OPERATOR)(fn)
+
+
+# -------------------------
+# Auth: login/logout/register
+# -------------------------
 @bp.get("/login")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("routes.index"))
 
-    # next можно прокинуть в форме скрытым input
     next_url = request.args.get("next", "")
     return render_template("login.html", next=next_url)
 
@@ -31,13 +81,14 @@ def login_post():
 
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
+    remember = bool(request.form.get("remember"))
 
     if not username or not password:
         flash("Введите логин и пароль.", "warning")
         return render_template("login.html", next=request.form.get("next", "")), 400
 
     user = User.query.filter_by(username=username).first()
-    if not user:
+    if not user or not check_password_hash(user.password_hash, password):
         flash("Неверный логин или пароль.", "danger")
         return render_template("login.html", next=request.form.get("next", "")), 401
 
@@ -45,11 +96,8 @@ def login_post():
         flash("Учетная запись отключена. Обратитесь к администратору.", "danger")
         return render_template("login.html", next=request.form.get("next", "")), 403
 
-    if not check_password_hash(user.password_hash, password):
-        flash("Неверный логин или пароль.", "danger")
-        return render_template("login.html", next=request.form.get("next", "")), 401
+    login_user(user, remember=remember)
 
-    login_user(user)
     user.last_login_at = datetime.utcnow()
     db.session.add(user)
     safe_commit()
@@ -58,19 +106,27 @@ def login_post():
     return redirect_next("routes.index")
 
 
-@bp.get("/logout")
+@bp.post("/logout")
 @login_required
-def logout():
+def logout_post():
     logout_user()
     flash("Вы вышли из системы.", "info")
     return redirect(url_for("routes.index"))
 
 
+# Оставим GET для совместимости (если где-то уже стоит ссылка)
+@bp.get("/logout")
+@login_required
+def logout():
+    return logout_post()
+
+
 @bp.get("/register")
 def register():
     """
-    Регистрация можно оставить открытой (учебный проект),
-    либо потом ограничить (например только админу).
+    Регистрация (учебный проект):
+    - можно оставить открытой,
+    - либо позже ограничить только администратору.
     """
     if current_user.is_authenticated:
         return redirect(url_for("routes.index"))
