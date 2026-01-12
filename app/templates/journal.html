@@ -87,6 +87,42 @@
     </div>
   </div>
 
+  {% if is_doctor %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Примечание врача</h2>
+        <p class="card__subtitle">Выберите спортсмена в фильтрах и оставьте заметку по его состоянию.</p>
+
+        {% if selected_athlete %}
+          <div class="row mt-12" style="gap:10px;">
+            <span class="badge">Спортсмен</span>
+            <div><b>{{ selected_athlete.full_name }}</b></div>
+          </div>
+
+          <form class="form mt-12" method="post" action="{{ url_for('feedback.doctor_note_create') }}">
+            <input type="hidden" name="athlete_id" value="{{ selected_athlete.id }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <div class="field">
+              <label>Тема</label>
+              <input class="input" name="title" required placeholder="Например: самочувствие после тренировки">
+            </div>
+            <div class="field">
+              <label>Примечание</label>
+              <textarea name="message" required placeholder="Кратко опишите состояние и рекомендации"></textarea>
+            </div>
+            <div class="row">
+              <button class="btn btn--primary" type="submit">Сохранить примечание</button>
+            </div>
+          </form>
+        {% else %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">
+            Сначала выберите спортсмена в фильтрах журнала.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
   <div class="card mt-16">
     <div class="card__body">
       {% if pagination["items"] and pagination["items"]|length > 0 %}
