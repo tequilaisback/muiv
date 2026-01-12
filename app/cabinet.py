@@ -162,13 +162,25 @@ def team_create():
         flash("Укажите название команды.", "warning")
         return redirect(url_for("cabinet.cabinet_home"))
 
-    if Team.query.filter_by(name=name).first():
-        flash("Команда с таким названием уже существует.", "danger")
-        return redirect(url_for("cabinet.cabinet_home"))
-
     existing = Team.query.filter_by(coach_id=current_user.id).first()
     if existing:
-        flash("У вас уже есть команда. Добавляйте спортсменов в неё.", "warning")
+        if existing.name == name:
+            flash("Название команды не изменилось.", "info")
+            return redirect(url_for("cabinet.cabinet_home"))
+
+        taken = Team.query.filter(Team.name == name, Team.id != existing.id).first()
+        if taken:
+            flash("Команда с таким названием уже существует.", "danger")
+            return redirect(url_for("cabinet.cabinet_home"))
+
+        existing.name = name
+        db.session.add(existing)
+        safe_commit()
+        flash("Название команды обновлено.", "success")
+        return redirect(url_for("cabinet.cabinet_home"))
+
+    if Team.query.filter_by(name=name).first():
+        flash("Команда с таким названием уже существует.", "danger")
         return redirect(url_for("cabinet.cabinet_home"))
 
     team = Team(name=name, coach=current_user, is_active=True)
