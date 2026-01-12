@@ -13,7 +13,9 @@
     </div>
     <div class="row">
       <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
-      <a class="btn" href="{{ url_for('routes.categories') }}">Показатели</a>
+      {% if is_admin or is_doctor or is_operator %}
+        <a class="btn" href="{{ url_for('routes.categories') }}">Показатели</a>
+      {% endif %}
     </div>
   </div>
 
