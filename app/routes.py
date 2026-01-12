@@ -4,18 +4,22 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from flask import Blueprint, render_template, request, url_for
-from flask_login import current_user
+from flask import Blueprint, abort, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from .auth import staff_required
 from .models import (
     Alert,
     Athlete,
+    Feedback,
     Indicator,
     IndicatorCategory,
     Measurement,
     Team,
+    User,
+    ROLE_DOCTOR,
 )
+from .permissions import get_coach_team_ids, is_coach, is_staff, is_user
 from .utils import (
     apply_out_of_range_filter,
     crumbs,
@@ -27,10 +31,16 @@ from .utils import (
 bp = Blueprint("routes", __name__)
 
 
-def _get_common_lists():
-    athletes = Athlete.query.filter_by(is_active=True).order_by(Athlete.full_name.asc()).all()
+def _get_common_lists(team_ids: Optional[list[int]] = None):
+    athletes_query = Athlete.query.filter_by(is_active=True)
+    teams_query = Team.query
+    if team_ids:
+        athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
+        teams_query = teams_query.filter(Team.id.in_(team_ids))
+
+    athletes = athletes_query.order_by(Athlete.full_name.asc()).all()
     indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
-    teams = Team.query.order_by(Team.name.asc()).all()
+    teams = teams_query.order_by(Team.name.asc()).all()
     return athletes, indicators, teams
 
 
@@ -79,38 +89,59 @@ def index():
     Гостю показываем только агрегаты.
     Staff — дополнительно последние измерения и последние alerts.
     """
-    athletes_count = Athlete.query.filter_by(is_active=True).count()
-    indicators_count = Indicator.query.filter_by(is_active=True).count()
+    athletes_count = 0
+    indicators_count = 0
 
     latest_measurements = []
     alerts_recent = []
 
-    is_staff = bool(
-        current_user.is_authenticated
-        and getattr(current_user, "has_role", lambda *_: False)("admin", "doctor", "coach", "operator")
-    )
+    is_staff_role = is_staff(current_user)
+    is_user_role = is_user(current_user)
+    is_coach_role = is_coach(current_user)
+    team_ids = get_coach_team_ids(current_user) if is_coach_role else []
 
-    if is_staff:
-        latest_measurements = (
+    if is_staff_role:
+        athletes_query = Athlete.query.filter_by(is_active=True)
+        if team_ids:
+            athletes_query = athletes_query.filter(Athlete.team_id.in_(team_ids))
+        athletes_count = athletes_query.count()
+        indicators_count = Indicator.query.filter_by(is_active=True).count()
+
+        latest_query = (
             Measurement.query
             .join(Measurement.athlete)
             .join(Measurement.indicator)
             .order_by(Measurement.measured_at.desc())
-            .limit(12)
-            .all()
         )
+        if team_ids:
+            latest_query = latest_query.filter(Athlete.team_id.in_(team_ids))
+        latest_measurements = latest_query.limit(12).all()
 
         since = datetime.utcnow() - timedelta(days=7)
-        alerts_recent = (
+        alerts_query = (
             Alert.query
             .join(Alert.measurement)
             .join(Measurement.athlete)
             .join(Measurement.indicator)
             .filter(Measurement.measured_at >= since)
             .order_by(Alert.created_at.desc())
-            .limit(12)
-            .all()
         )
+        if team_ids:
+            alerts_query = alerts_query.filter(Athlete.team_id.in_(team_ids))
+        alerts_recent = alerts_query.limit(12).all()
+    elif is_user_role:
+        athlete_profile = getattr(current_user, "athlete", None)
+        if athlete_profile:
+            athletes_count = 1
+            indicators_count = Indicator.query.filter_by(is_active=True).count()
+            latest_measurements = (
+                Measurement.query
+                .join(Measurement.indicator)
+                .filter(Measurement.athlete_id == athlete_profile.id)
+                .order_by(Measurement.measured_at.desc())
+                .limit(12)
+                .all()
+            )
 
     bc = crumbs(("Главная", ""))
 
@@ -121,7 +152,7 @@ def index():
         indicators_count=indicators_count,
         latest_measurements=latest_measurements,
         alerts_recent=alerts_recent,
-        is_staff=is_staff,
+        is_staff=is_staff_role,
     )
 
 
@@ -143,7 +174,8 @@ def contacts():
 @bp.get("/catalog")
 @staff_required
 def catalog():
-    athletes, indicators, teams = _get_common_lists()
+    team_ids = get_coach_team_ids(current_user) if is_coach(current_user) else []
+    athletes, indicators, teams = _get_common_lists(team_ids=team_ids)
 
     athlete_id = request.args.get("athlete_id", type=int)
     indicator_id = request.args.get("indicator_id", type=int)
@@ -161,6 +193,9 @@ def catalog():
         .join(Measurement.indicator)
         .order_by(Measurement.measured_at.desc())
     )
+
+    if team_ids:
+        q = q.filter(Athlete.team_id.in_(team_ids))
 
     q = _apply_measurement_filters(
         q,
@@ -201,7 +236,8 @@ def offers():
     """
     Отклонения — из таблицы alerts.
     """
-    athletes, indicators, teams = _get_common_lists()
+    team_ids = get_coach_team_ids(current_user) if is_coach(current_user) else []
+    athletes, indicators, teams = _get_common_lists(team_ids=team_ids)
 
     athlete_id = request.args.get("athlete_id", type=int)
     indicator_id = request.args.get("indicator_id", type=int)
@@ -218,6 +254,8 @@ def offers():
         .join(Measurement.indicator)
         .order_by(Alert.created_at.desc())
     )
+    if team_ids:
+        q = q.filter(Athlete.team_id.in_(team_ids))
 
     if athlete_id:
         q = q.filter(Measurement.athlete_id == athlete_id)
@@ -285,6 +323,9 @@ def search():
 
     if q and len(q) >= 2:
         aq = Athlete.query.filter(Athlete.is_active.is_(True)).filter(Athlete.full_name.ilike(f"%{q}%"))
+        team_ids = get_coach_team_ids(current_user) if is_coach(current_user) else []
+        if team_ids:
+            aq = aq.filter(Athlete.team_id.in_(team_ids))
         if team_id:
             aq = aq.filter(Athlete.team_id == team_id)
         athletes = aq.order_by(Athlete.full_name.asc()).limit(50).all()
@@ -299,6 +340,10 @@ def search():
         )
 
     teams = Team.query.order_by(Team.name.asc()).all()
+    if is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids:
+            teams = Team.query.filter(Team.id.in_(team_ids)).order_by(Team.name.asc()).all()
 
     bc = crumbs(("Главная", url_for("routes.index")), ("Поиск", ""))
 
@@ -315,9 +360,19 @@ def search():
 
 
 @bp.get("/products/<int:athlete_id>")
-@staff_required
+@login_required
 def product(athlete_id: int):
     athlete = Athlete.query.get_or_404(athlete_id)
+    if is_user(current_user):
+        athlete_profile = getattr(current_user, "athlete", None)
+        if not athlete_profile or athlete_profile.id != athlete.id:
+            abort(403)
+    elif is_coach(current_user):
+        team_ids = get_coach_team_ids(current_user)
+        if team_ids and athlete.team_id not in team_ids:
+            abort(403)
+    elif not is_staff(current_user):
+        abort(403)
 
     last_measurements = (
         Measurement.query
@@ -329,6 +384,15 @@ def product(athlete_id: int):
     )
 
     indicators = Indicator.query.filter_by(is_active=True).order_by(Indicator.name.asc()).all()
+    doctor_recommendations = (
+        Feedback.query
+        .join(Feedback.author)
+        .filter(Feedback.athlete_id == athlete.id)
+        .filter(User.role == ROLE_DOCTOR)
+        .order_by(Feedback.created_at.desc())
+        .limit(10)
+        .all()
+    )
 
     bc = crumbs(
         ("Главная", url_for("routes.index")),
@@ -342,4 +406,5 @@ def product(athlete_id: int):
         athlete=athlete,
         last_measurements=last_measurements,
         indicators=indicators,
+        doctor_recommendations=doctor_recommendations,
     )
