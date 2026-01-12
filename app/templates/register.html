@@ -1,0 +1,105 @@
+{# app/templates/register.html #}
+{% extends "base.html" %}
+
+{% block title %}Регистрация — {{ APP_TITLE }}{% endblock %}
+
+{% block content %}
+  <div class="grid grid--2">
+    <div class="card">
+      <div class="card__body">
+        <h1 class="card__title">Регистрация</h1>
+        <p class="card__subtitle">
+          Создайте учетную запись, чтобы работать с личным кабинетом и историей измерений.
+        </p>
+
+        <form class="form mt-12" method="post" action="{{ url_for('auth.register_post') }}">
+          <input type="hidden" name="next" value="{{ next }}">
+
+          <div class="field">
+            <label>Логин</label>
+            <input
+              class="input"
+              name="username"
+              required
+              minlength="3"
+              autocomplete="username"
+              placeholder="Например: ivanov"
+              value="{{ request.form.get('username', '') }}"
+            >
+          </div>
+
+          <div class="field">
+            <label>Email (опционально)</label>
+            <input
+              class="input"
+              type="email"
+              name="email"
+              autocomplete="email"
+              placeholder="name@example.com"
+              value="{{ request.form.get('email', '') }}"
+            >
+          </div>
+
+          <div class="field">
+            <label>Пароль</label>
+            <input
+              class="input"
+              type="password"
+              name="password"
+              required
+              minlength="6"
+              autocomplete="new-password"
+              placeholder="Минимум 6 символов"
+            >
+          </div>
+
+          <div class="field">
+            <label>Повтор пароля</label>
+            <input
+              class="input"
+              type="password"
+              name="password2"
+              required
+              minlength="6"
+              autocomplete="new-password"
+              placeholder="Повторите пароль"
+            >
+          </div>
+
+          <div class="row">
+            <button class="btn btn--primary" type="submit">Создать аккаунт</button>
+            <a class="btn" href="{{ url_for('auth.login') }}">Уже есть аккаунт</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Права доступа</h2>
+        <p class="card__subtitle">
+          Новая учетная запись создается как обычный пользователь.
+        </p>
+
+        <div class="mt-16">
+          <span class="badge">Доступ пользователя</span>
+          <p class="mt-8" style="margin:0; color: var(--muted);">
+            Личный кабинет, обращения и публичные разделы системы.
+          </p>
+        </div>
+
+        <div class="mt-16">
+          <span class="badge">Доступ сотрудника</span>
+          <p class="mt-8" style="margin:0; color: var(--muted);">
+            Журнал, отклонения, поиск и экспорт в 1С доступны только сотрудникам.
+          </p>
+        </div>
+
+        <div class="mt-16">
+          <a class="btn btn--primary" href="{{ url_for('routes.about') }}">О системе</a>
+          <a class="btn" href="{{ url_for('routes.contacts') }}">Контакты</a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
