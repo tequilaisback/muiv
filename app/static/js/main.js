@@ -1,12 +1,7 @@
 // app/static/js/main.js
-// Лёгкий JS для UI: flash-уведомления, confirm, фильтры, тултипы, и мини-хелперы под графики.
-
 (function () {
   "use strict";
 
-  // ----------------------------
-  // Helpers
-  // ----------------------------
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -30,8 +25,7 @@
   function parseNumber(s) {
     if (s === null || s === undefined) return NaN;
     const v = String(s).replace(",", ".").trim();
-    const n = Number(v);
-    return n;
+    return Number(v);
   }
 
   function escapeHtml(str) {
@@ -43,9 +37,6 @@
       .replaceAll("'", "&#039;");
   }
 
-  // ----------------------------
-  // Flash messages: auto-hide + close
-  // ----------------------------
   function initFlash() {
     const container = $(".flash");
     if (!container) return;
@@ -57,7 +48,6 @@
       });
     });
 
-    // auto hide after 5s (only if data-autohide="1" on container)
     const autoHide = container.getAttribute("data-autohide") === "1";
     if (!autoHide) return;
 
@@ -70,64 +60,72 @@
     }, 5000);
   }
 
-  // ----------------------------
-  // Confirm for destructive actions
-  // Add attribute: data-confirm="Точно удалить?"
-  // ----------------------------
   function initConfirms() {
     document.addEventListener("click", (e) => {
       const el = e.target.closest("[data-confirm]");
       if (!el) return;
 
       const msg = el.getAttribute("data-confirm") || "Подтвердить действие?";
-      const ok = window.confirm(msg);
-      if (!ok) {
+      if (!window.confirm(msg)) {
         e.preventDefault();
         e.stopPropagation();
       }
     });
+
+    document.addEventListener(
+      "submit",
+      (e) => {
+        const form = e.target.closest("form[data-confirm]");
+        if (!form) return;
+
+        const msg = form.getAttribute("data-confirm") || "Подтвердить действие?";
+        if (!window.confirm(msg)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      },
+      true
+    );
   }
 
-  // ----------------------------
-  // Filter forms: submit on change (optional)
-  // Add attribute: data-autosubmit="1" on form
-  // ----------------------------
   function initAutoSubmitFilters() {
     $$("form[data-autosubmit='1']").forEach((form) => {
-      const handler = debounce(() => form.submit(), 250);
-      $$("select, input[type='checkbox']", form).forEach((el) => {
-        el.addEventListener("change", handler);
+      const submitDebounced = debounce(() => form.submit(), 300);
+
+      const textEnabled = form.getAttribute("data-autosubmit-text") === "1";
+
+      $$("select, input[type='checkbox'], input[type='radio'], input[type='date'], input[type='datetime-local'], input[type='time']", form).forEach(
+        (el) => el.addEventListener("change", () => form.submit())
+      );
+
+      $$("input[type='text'], input[type='search'], input[type='number']", form).forEach((el) => {
+        const perEl = el.getAttribute("data-autosubmit-text") === "1";
+        if (!textEnabled && !perEl) return;
+        el.addEventListener("input", submitDebounced);
       });
     });
   }
 
-  // ----------------------------
-  // Input numeric improvements
-  // - replace comma to dot on blur
-  // - optional min/max validation via data-min/data-max
-  // ----------------------------
   function initNumericInputs() {
     $$("input[data-numeric='1']").forEach((inp) => {
       inp.addEventListener("blur", () => {
-        const v = inp.value;
-        if (!v) return;
-        inp.value = String(v).replace(",", ".").trim();
+        if (!inp.value) return;
 
+        inp.value = String(inp.value).replace(",", ".").trim();
         const n = parseNumber(inp.value);
+
         const min = parseNumber(inp.getAttribute("data-min"));
         const max = parseNumber(inp.getAttribute("data-max"));
 
-        if (Number.isFinite(min) && n < min) inp.classList.add("is-invalid");
-        else if (Number.isFinite(max) && n > max) inp.classList.add("is-invalid");
-        else inp.classList.remove("is-invalid");
+        if ((Number.isFinite(min) && n < min) || (Number.isFinite(max) && n > max)) {
+          inp.classList.add("is-invalid");
+        } else {
+          inp.classList.remove("is-invalid");
+        }
       });
     });
   }
 
-  // ----------------------------
-  // Tooltips (very light)
-  // Elements: data-tip="..."
-  // ----------------------------
   function initTooltips() {
     const tip = document.createElement("div");
     tip.style.position = "fixed";
@@ -149,17 +147,18 @@
     document.addEventListener("mouseover", (e) => {
       const el = e.target.closest("[data-tip]");
       if (!el) return;
+      const text = el.getAttribute("data-tip") || "";
+      if (!text) return;
+
       active = el;
-      tip.textContent = el.getAttribute("data-tip") || "";
+      tip.textContent = text;
       tip.style.display = "block";
     });
 
     document.addEventListener("mousemove", (e) => {
       if (!active) return;
-      const x = e.clientX + 12;
-      const y = e.clientY + 14;
-      tip.style.left = x + "px";
-      tip.style.top = y + "px";
+      tip.style.left = e.clientX + 12 + "px";
+      tip.style.top = e.clientY + 14 + "px";
     });
 
     document.addEventListener("mouseout", (e) => {
@@ -168,34 +167,66 @@
       active = null;
       tip.style.display = "none";
     });
+
+    document.addEventListener("scroll", () => {
+      if (!active) return;
+      active = null;
+      tip.style.display = "none";
+    });
   }
 
-  // ----------------------------
-  // Charts support (optional)
-  // If Chart.js is included in templates, we can render charts automatically.
-  //
-  // Use:
-  // <canvas class="js-chart"
-  //         data-chart-type="line"
-  //         data-label="Пульс"
-  //         data-labels='["2026-01-01","2026-01-02"]'
-  //         data-values='[62,65]'
-  //         data-min="50"
-  //         data-max="90"></canvas>
-  //
-  // This module:
-  // - checks window.Chart
-  // - builds a chart with a safe default
-  // - optional min/max reference lines (if plugin not available, just show in tooltip)
-  // ----------------------------
+  function initModals() {
+    const openModal = (modal) => {
+      if (!modal) return;
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.documentElement.classList.add("is-modal-open");
+    };
+
+    const closeModal = (modal) => {
+      if (!modal) return;
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      document.documentElement.classList.remove("is-modal-open");
+    };
+
+    document.addEventListener("click", (e) => {
+      const opener = e.target.closest("[data-modal-open]");
+      if (opener) {
+        e.preventDefault();
+        const sel = opener.getAttribute("data-modal-open");
+        const modal = sel ? $(sel) : null;
+        openModal(modal);
+        return;
+      }
+
+      const closer = e.target.closest("[data-modal-close]");
+      if (closer) {
+        e.preventDefault();
+        const modal = closer.closest("[data-modal]");
+        closeModal(modal);
+        return;
+      }
+
+      const modal = e.target.closest("[data-modal]");
+      if (modal && e.target === modal && modal.getAttribute("data-modal-overlay-close") === "1") {
+        closeModal(modal);
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const modal = $("[data-modal].is-open");
+      if (modal) closeModal(modal);
+    });
+
+    window.AppModal = { openModal, closeModal };
+  }
+
   function initCharts() {
     const canvases = $$(".js-chart");
     if (!canvases.length) return;
-
-    if (typeof window.Chart === "undefined") {
-      // Chart.js is not loaded — keep UI silent and usable
-      return;
-    }
+    if (typeof window.Chart === "undefined") return;
 
     canvases.forEach((canvas) => {
       try {
@@ -207,10 +238,9 @@
         const nmin = parseNumber(canvas.getAttribute("data-min"));
         const nmax = parseNumber(canvas.getAttribute("data-max"));
 
-        // dataset
         const datasets = [
           {
-            label: label,
+            label,
             data: values,
             borderWidth: 2,
             tension: 0.25,
@@ -218,8 +248,6 @@
           },
         ];
 
-        // "reference" datasets for min/max (simple lines)
-        // These will appear as additional series if values provided.
         if (Number.isFinite(nmin)) {
           datasets.push({
             label: "Норма min",
@@ -229,6 +257,7 @@
             pointRadius: 0,
           });
         }
+
         if (Number.isFinite(nmax)) {
           datasets.push({
             label: "Норма max",
@@ -239,13 +268,9 @@
           });
         }
 
-        // eslint-disable-next-line no-new
         new window.Chart(canvas.getContext("2d"), {
           type,
-          data: {
-            labels,
-            datasets,
-          },
+          data: { labels, datasets },
           options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -254,11 +279,7 @@
               legend: { display: true },
               tooltip: {
                 callbacks: {
-                  label: function (ctx) {
-                    const v = ctx.parsed.y;
-                    const s = `${ctx.dataset.label}: ${formatNumber(v, 2)}`;
-                    return s;
-                  },
+                  label: (ctx) => `${ctx.dataset.label}: ${formatNumber(ctx.parsed.y, 2)}`,
                 },
               },
             },
@@ -269,16 +290,11 @@
           },
         });
       } catch (err) {
-        // silently ignore chart errors
         console.warn("Chart init error:", err);
       }
     });
   }
 
-  // ----------------------------
-  // Small UX sugar: copy-to-clipboard
-  // Elements with data-copy="text" or data-copy-target="#id"
-  // ----------------------------
   function initCopyButtons() {
     document.addEventListener("click", async (e) => {
       const el = e.target.closest("[data-copy], [data-copy-target]");
@@ -291,38 +307,37 @@
         text = t ? (t.value || t.textContent || "") : "";
       }
 
+      text = String(text || "");
       if (!text) return;
 
       try {
         await navigator.clipboard.writeText(text);
-        el.setAttribute("data-tip", "Скопировано!");
       } catch {
-        // fallback
         const tmp = document.createElement("textarea");
         tmp.value = text;
         document.body.appendChild(tmp);
         tmp.select();
         document.execCommand("copy");
         tmp.remove();
-        el.setAttribute("data-tip", "Скопировано!");
       }
+
+      const prev = el.getAttribute("data-tip") || "";
+      el.setAttribute("data-tip", "Скопировано!");
+      setTimeout(() => el.setAttribute("data-tip", prev), 1200);
     });
   }
 
-  // ----------------------------
-  // Init
-  // ----------------------------
   document.addEventListener("DOMContentLoaded", () => {
     initFlash();
     initConfirms();
     initAutoSubmitFilters();
     initNumericInputs();
     initTooltips();
+    initModals();
     initCharts();
     initCopyButtons();
   });
 
-  // expose minimal helpers if needed in templates
   window.AppUI = {
     debounce,
     formatNumber,
