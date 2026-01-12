@@ -91,13 +91,15 @@
             </div>
           </a>
 
-          <a class="square-card" href="{{ url_for('routes.categories') }}">
-            <div class="square-card__media"><span aria-hidden="true"></span></div>
-            <div class="square-card__body">
-              <p class="square-card__title">Показатели и нормы</p>
-              <p class="square-card__meta">Категории, единицы, диапазоны</p>
-            </div>
-          </a>
+          {% if is_admin or is_doctor or is_operator %}
+            <a class="square-card" href="{{ url_for('routes.categories') }}">
+              <div class="square-card__media"><span aria-hidden="true"></span></div>
+              <div class="square-card__body">
+                <p class="square-card__title">Показатели и нормы</p>
+                <p class="square-card__meta">Категории, единицы, диапазоны</p>
+              </div>
+            </a>
+          {% endif %}
 
           <a class="square-card" href="{{ url_for('routes.search') }}">
             <div class="square-card__media"><span aria-hidden="true"></span></div>
