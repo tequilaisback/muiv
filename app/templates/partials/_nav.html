@@ -6,50 +6,24 @@
       <span>{{ APP_TITLE or "Мониторинг спортсменов" }}</span>
     </a>
 
+    {# staff = admin/doctor/coach/operator #}
+    {% set is_staff = (
+      current_user.is_authenticated
+      and (current_user.has_role('admin', 'doctor', 'coach', 'operator') if current_user.has_role is defined else false)
+      and (current_user.is_active if current_user.is_active is defined else true)
+    ) %}
+
     <nav class="nav" aria-label="Навигация">
+      {# ПУБЛИЧНО: доступно гостю #}
       <a href="{{ url_for('routes.index') }}"
          class="{% if request.endpoint == 'routes.index' %}is-active{% endif %}">
         Дашборд
-      </a>
-
-      <a href="{{ url_for('routes.catalog') }}"
-         class="{% if request.endpoint == 'routes.catalog' %}is-active{% endif %}">
-        Журнал
-      </a>
-
-      <a href="{{ url_for('routes.offers') }}"
-         class="{% if request.endpoint == 'routes.offers' %}is-active{% endif %}">
-        Отклонения
-      </a>
-
-      <a href="{{ url_for('routes.categories') }}"
-         class="{% if request.endpoint == 'routes.categories' %}is-active{% endif %}">
-        Показатели
-      </a>
-
-      <a href="{{ url_for('routes.search') }}"
-         class="{% if request.endpoint == 'routes.search' %}is-active{% endif %}">
-        Поиск
       </a>
 
       <a href="{{ url_for('feedback.feedback_home') }}"
          class="{% if request.endpoint and request.endpoint.startswith('feedback.') %}is-active{% endif %}">
         Обращения
       </a>
-
-      {% if current_user.is_authenticated %}
-        <a href="{{ url_for('cabinet.cabinet_home') }}"
-           class="{% if request.endpoint and request.endpoint.startswith('cabinet.') %}is-active{% endif %}">
-          Кабинет
-        </a>
-
-        {% if current_user.has_role('admin', 'doctor', 'coach', 'operator') %}
-          <a href="{{ url_for('admin.dashboard') }}"
-             class="{% if request.endpoint and request.endpoint.startswith('admin.') %}is-active{% endif %}">
-            Админка
-          </a>
-        {% endif %}
-      {% endif %}
 
       <a href="{{ url_for('routes.about') }}"
          class="{% if request.endpoint == 'routes.about' %}is-active{% endif %}">
@@ -60,6 +34,44 @@
          class="{% if request.endpoint == 'routes.contacts' %}is-active{% endif %}">
         Контакты
       </a>
+
+      {# ТОЛЬКО STAFF: не показываем гостю и обычному user #}
+      {% if is_staff %}
+        <a href="{{ url_for('routes.catalog') }}"
+           class="{% if request.endpoint == 'routes.catalog' %}is-active{% endif %}">
+          Журнал
+        </a>
+
+        <a href="{{ url_for('routes.offers') }}"
+           class="{% if request.endpoint == 'routes.offers' %}is-active{% endif %}">
+          Отклонения
+        </a>
+
+        <a href="{{ url_for('routes.categories') }}"
+           class="{% if request.endpoint == 'routes.categories' %}is-active{% endif %}">
+          Показатели
+        </a>
+
+        <a href="{{ url_for('routes.search') }}"
+           class="{% if request.endpoint == 'routes.search' %}is-active{% endif %}">
+          Поиск
+        </a>
+      {% endif %}
+
+      {# Авторизованным: кабинет (и админка только staff) #}
+      {% if current_user.is_authenticated %}
+        <a href="{{ url_for('cabinet.cabinet_home') }}"
+           class="{% if request.endpoint and request.endpoint.startswith('cabinet.') %}is-active{% endif %}">
+          Кабинет
+        </a>
+
+        {% if is_staff %}
+          <a href="{{ url_for('admin.dashboard') }}"
+             class="{% if request.endpoint and request.endpoint.startswith('admin.') %}is-active{% endif %}">
+            Админка
+          </a>
+        {% endif %}
+      {% endif %}
     </nav>
 
     <div class="row">
