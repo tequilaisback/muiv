@@ -16,7 +16,11 @@
     </div>
 
     <div class="row">
-      <a class="btn" href="{{ url_for('routes.catalog') }}">К журналу</a>
+      {% if is_user %}
+        <a class="btn" href="{{ url_for('cabinet.cabinet_home') }}">К кабинету</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('routes.catalog') }}">К журналу</a>
+      {% endif %}
       <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Заметка/обращение</a>
       {% if is_admin or is_coach or is_operator %}
         <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Добавить измерение</a>
