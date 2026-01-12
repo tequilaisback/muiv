@@ -13,8 +13,15 @@
 
       <div class="row mt-16">
         <a class="btn btn--primary" href="{{ url_for('routes.index') }}">На главную</a>
-        <a class="btn" href="{{ url_for('routes.search') }}">Поиск</a>
-        <a class="btn btn--ghost" href="{{ url_for('routes.catalog') }}">Журнал измерений</a>
+        {% if is_staff %}
+          <a class="btn" href="{{ url_for('routes.search') }}">Поиск</a>
+          <a class="btn btn--ghost" href="{{ url_for('routes.catalog') }}">Журнал измерений</a>
+        {% elif is_user %}
+          <a class="btn" href="{{ url_for('cabinet.cabinet_home') }}">Кабинет</a>
+        {% else %}
+          <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
+          <a class="btn btn--ghost" href="{{ url_for('auth.login') }}">Войти</a>
+        {% endif %}
       </div>
     </div>
   </div>
