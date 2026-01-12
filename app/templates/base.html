@@ -4,25 +4,44 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+  <title>{% block title %}{{ APP_TITLE or "Мониторинг спортсменов" }}{% endblock %}</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta name="theme-color" content="#d40000">
 </head>
 <body>
 
   {% include "partials/_nav.html" %}
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  {% include "partials/_flash.html" %}
 
-    {% block content %}{% endblock %}
+  {% block breadcrumbs %}
+    {% include "partials/_breadcrumbs.html" %}
+  {% endblock %}
+
+  <main class="section">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
   </main>
 
   <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
+    <div class="container row space-between">
+      <div>
+        © {{ (now().year if now else 2026) }} — {{ APP_TITLE or "Мониторинг показателей здоровья спортсменов" }}
+      </div>
+      <div class="row">
+        <span class="badge">Flask + SQLite</span>
+        <span class="badge badge--bad">Акцент: красный</span>
+      </div>
+    </div>
   </footer>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+  {# Поддержка графиков (если решишь использовать Chart.js) #}
+  {# <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> #}
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>
