@@ -1,12 +1,12 @@
 # app/__init__.py
-import os
-from pathlib import Path
+from __future__ import annotations
 
 from flask import Flask, render_template
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 
-from .models import db, User
-
+from config import Config
+from .db import db, init_db
+from .models import User
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -23,22 +23,13 @@ def load_user(user_id: str):
 
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
+    app.config.from_object(Config)
 
-    # --- базовый конфиг ---
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
-
-    # SQLite в instance/
-    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
-    db_path = os.path.join(app.instance_path, "app.sqlite")
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + db_path
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-    # --- init extensions ---
+    # init extensions
     db.init_app(app)
     login_manager.init_app(app)
 
-    # --- blueprints ---
-    # (в этих файлах мы дальше сделаем: bp = Blueprint(...))
+    # blueprints
     from .routes import bp as routes_bp
     from .auth import bp as auth_bp
     from .admin import bp as admin_bp
@@ -51,30 +42,36 @@ def create_app() -> Flask:
     app.register_blueprint(cabinet_bp, url_prefix="/cabinet")
     app.register_blueprint(feedback_bp, url_prefix="/feedback")
 
-    # --- контекст для шаблонов ---
+    # context for templates
     @app.context_processor
     def inject_globals():
         return {
-            "APP_TITLE": "Мониторинг показателей здоровья спортсменов",
+            "APP_TITLE": app.config.get("APP_TITLE", "Мониторинг спортсменов"),
+            "CURRENT_USER": current_user,  # иногда удобно в шаблонах (опционально)
         }
 
-    # --- ошибки ---
+    # error handlers
     @app.errorhandler(404)
-    def not_found(e):
+    def not_found(_e):
         return render_template("404.html"), 404
 
+    @app.errorhandler(403)
+    def forbidden(_e):
+        return render_template("403.html"), 403
+
     @app.errorhandler(500)
-    def server_error(e):
+    def server_error(_e):
+        # в debug пусть Flask показывает трейс, но шаблон тоже полезен
         return render_template("500.html"), 500
 
-    # --- создание БД + сиды (для учебного проекта) ---
+    # create DB + seed (учебный проект)
     with app.app_context():
-        db.create_all()
+        init_db()
         try:
             from .seed import seed_db
             seed_db()
         except Exception:
-            # seed_db добавим/настроим позже — чтобы приложение не падало
-            pass
+            # seed не должен "ронять" приложение в учебной сборке
+            app.logger.exception("seed_db failed")
 
     return app
