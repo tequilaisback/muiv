@@ -1,28 +1,252 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/product.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}{{ athlete.full_name }} — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% set selected_indicator_id = request.args.get('indicator_id', type=int) %}
+{% set period = request.args.get('period', '') %}
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">{{ athlete.full_name }}</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Профиль спортсмена и динамика показателей.
+      </p>
+    </div>
 
-    {% block content %}{% endblock %}
-  </main>
+    <div class="row">
+      <a class="btn" href="{{ url_for('routes.catalog') }}">К журналу</a>
+      <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Заметка/обращение</a>
+      {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+        <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Добавить измерение</a>
+      {% endif %}
+    </div>
+  </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+  <div class="row mt-12">
+    <span class="badge" data-tip="Команда/группа">{{ athlete.team.name if athlete.team else "Команда: —" }}</span>
+    {% if athlete.birth_date %}
+      <span class="badge" data-tip="Дата рождения">{{ athlete.birth_date.strftime('%Y-%m-%d') }}</span>
+    {% endif %}
+    {% if athlete.gender %}
+      <span class="badge" data-tip="Пол">{{ athlete.gender }}</span>
+    {% endif %}
+    {% if athlete.is_active %}
+      <span class="badge badge--ok">Активен</span>
+    {% else %}
+      <span class="badge badge--warn">Неактивен</span>
+    {% endif %}
+  </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+  {% if athlete.notes %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Примечание</h2>
+        <p class="card__subtitle" style="margin-top:10px;">{{ athlete.notes }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="grid grid--2 mt-16">
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">График (по одному показателю)</h2>
+        <p class="card__subtitle">
+          Выберите показатель — построится линия по последним значениям (если подключен Chart.js).
+        </p>
+
+        <form class="filters mt-12" method="get" action="{{ url_for('routes.product', athlete_id=athlete.id) }}" data-autosubmit="1">
+          <div class="field">
+            <label>Показатель</label>
+            <select name="indicator_id">
+              <option value="">— выберите —</option>
+              {% for i in indicators %}
+                <option value="{{ i.id }}" {% if selected_indicator_id==i.id %}selected{% endif %}>{{ i.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="actions">
+            <button class="btn" type="submit">Показать</button>
+            <a class="btn" href="{{ url_for('routes.product', athlete_id=athlete.id) }}">Сбросить</a>
+          </div>
+        </form>
+
+        {% if selected_indicator_id %}
+          {% set selected_indicator = None %}
+          {% for i in indicators %}
+            {% if i.id == selected_indicator_id %}
+              {% set selected_indicator = i %}
+            {% endif %}
+          {% endfor %}
+
+          {% set ns = namespace(labels=[], values=[]) %}
+          {# берём измерения этого спортсмена, но только выбранного показателя #}
+          {% for m in last_measurements|reverse %}
+            {% if m.indicator_id == selected_indicator_id %}
+              {% set _ = ns.labels.append(m.measured_at.strftime('%Y-%m-%d %H:%M')) %}
+              {% set _ = ns.values.append(m.value) %}
+            {% endif %}
+          {% endfor %}
+
+          <div class="card mt-16">
+            <div class="card__body">
+              <div class="row space-between">
+                <div>
+                  <div class="badge">Показатель</div>
+                  <div style="margin-top:8px; font-weight:900;">{{ selected_indicator.name if selected_indicator else "—" }}</div>
+                  <div style="color:var(--muted); font-size:13px; margin-top:6px;">
+                    {% if selected_indicator and (selected_indicator.norm_min is not none or selected_indicator.norm_max is not none) %}
+                      Норма: {{ selected_indicator.norm_min if selected_indicator.norm_min is not none else "—" }}
+                      — {{ selected_indicator.norm_max if selected_indicator.norm_max is not none else "—" }}
+                      {{ selected_indicator.unit or "" }}
+                    {% else %}
+                      Норма: не задана
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="row">
+                  <span class="badge" data-tip="Количество точек на графике">{{ ns.values|length }} точек</span>
+                </div>
+              </div>
+
+              <div class="mt-16" style="height:260px;">
+                <canvas
+                  class="js-chart"
+                  data-chart-type="line"
+                  data-label="{{ selected_indicator.name if selected_indicator else 'Показатель' }}"
+                  data-labels='{{ ns.labels|tojson }}'
+                  data-values='{{ ns.values|tojson }}'
+                  {% if selected_indicator and selected_indicator.norm_min is not none %}data-min="{{ selected_indicator.norm_min }}"{% endif %}
+                  {% if selected_indicator and selected_indicator.norm_max is not none %}data-max="{{ selected_indicator.norm_max }}"{% endif %}
+                ></canvas>
+              </div>
+
+              <div class="mt-12" style="color: var(--muted); font-size: 13px;">
+                Если график пустой — подключите Chart.js в <code>base.html</code>
+                (скрипт CDNs) или оставьте как “подготовка для графиков”.
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <p class="mt-16" style="margin:0; color: var(--muted);">
+            Выберите показатель, чтобы увидеть график.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__body">
+        <div class="row space-between">
+          <div>
+            <h2 class="card__title">Последние измерения</h2>
+            <p class="card__subtitle">
+              Показано до 50 последних записей. Можно отфильтровать по показателю.
+            </p>
+          </div>
+          <div class="row">
+            {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+              <a class="btn" href="{{ url_for('admin.export_1c', athlete_id=athlete.id) }}">Экспорт в 1С</a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mt-12">
+          <form class="filters" method="get" action="{{ url_for('routes.product', athlete_id=athlete.id) }}" data-autosubmit="1">
+            <div class="field">
+              <label>Фильтр по показателю</label>
+              <select name="indicator_id">
+                <option value="">Все</option>
+                {% for i in indicators %}
+                  <option value="{{ i.id }}" {% if selected_indicator_id==i.id %}selected{% endif %}>{{ i.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="actions">
+              <button class="btn" type="submit">Показать</button>
+              <a class="btn" href="{{ url_for('routes.product', athlete_id=athlete.id) }}">Сбросить</a>
+            </div>
+          </form>
+        </div>
+
+        {% set shown = 0 %}
+        <table class="table mt-12">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Показатель</th>
+              <th>Значение</th>
+              <th>Норма</th>
+              <th>Статус</th>
+              <th>Источник</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in last_measurements %}
+              {% if (not selected_indicator_id) or (m.indicator_id == selected_indicator_id) %}
+                {% set nmin = m.indicator.norm_min %}
+                {% set nmax = m.indicator.norm_max %}
+                {% set is_bad = ((nmin is not none and m.value < nmin) or (nmax is not none and m.value > nmax)) %}
+                <tr>
+                  <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>
+                    <b>{{ m.indicator.name }}</b>
+                    <div style="color:var(--muted); font-size:12px;">
+                      {{ m.indicator.category.name if m.indicator.category else "—" }}
+                    </div>
+                  </td>
+                  <td><b>{{ m.value }}</b> {{ m.indicator.unit or "" }}</td>
+                  <td>
+                    {% if nmin is not none or nmax is not none %}
+                      {{ nmin if nmin is not none else "—" }} — {{ nmax if nmax is not none else "—" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if is_bad %}
+                      <span class="badge badge--bad">Отклонение</span>
+                    {% else %}
+                      <span class="badge badge--ok">Норма</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="badge">{{ m.source or "—" }}</span>
+                  </td>
+                </tr>
+
+                {% if m.comment %}
+                  <tr>
+                    <td colspan="6" style="color: var(--muted); font-size: 13px;">
+                      Комментарий: {{ m.comment }}
+                    </td>
+                  </tr>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if (last_measurements|length) == 0 %}
+          <p class="mt-12" style="margin:0; color: var(--muted);">Измерений пока нет.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Быстрые действия</h2>
+      <p class="card__subtitle" style="margin-top:10px;">
+        При отклонениях удобно создать заметку/инцидент и затем выгрузить журнал в 1С.
+      </p>
+      <div class="row mt-12">
+        <a class="btn btn--primary" href="{{ url_for('feedback.feedback_home') }}">Открыть “Обращения”</a>
+        <a class="btn" href="{{ url_for('routes.offers', athlete_id=athlete.id) }}">Показать отклонения</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
