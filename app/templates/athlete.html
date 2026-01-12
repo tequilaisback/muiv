@@ -18,7 +18,7 @@
     <div class="row">
       <a class="btn" href="{{ url_for('routes.catalog') }}">К журналу</a>
       <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Заметка/обращение</a>
-      {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+      {% if is_admin or is_coach or is_operator %}
         <a class="btn btn--primary" href="{{ url_for('admin.measurements') }}">Добавить измерение</a>
       {% endif %}
     </div>
@@ -47,6 +47,38 @@
       </div>
     </div>
   {% endif %}
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Рекомендации врача</h2>
+      <p class="card__subtitle" style="margin-top:6px;">
+        Последние рекомендации по спортсмену.
+      </p>
+
+      {% if doctor_recommendations and doctor_recommendations|length > 0 %}
+        <table class="table mt-12">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Тема</th>
+              <th>Сообщение</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in doctor_recommendations %}
+              <tr>
+                <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><b>{{ r.title }}</b></td>
+                <td>{{ r.message }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="mt-12" style="margin:0; color: var(--muted);">Рекомендаций пока нет.</p>
+      {% endif %}
+    </div>
+  </div>
 
   <div class="grid grid--2 mt-16">
     <div class="card">
@@ -148,7 +180,7 @@
             </p>
           </div>
           <div class="row">
-            {% if current_user.is_authenticated and current_user.has_role('admin','doctor','coach','operator') %}
+            {% if is_admin %}
               <a class="btn" href="{{ url_for('admin.export_1c', athlete_id=athlete.id) }}">Экспорт в 1С</a>
             {% endif %}
           </div>
