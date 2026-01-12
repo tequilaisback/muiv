@@ -1,28 +1,83 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/about.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}О системе — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="grid grid--2">
+    <div class="card">
+      <div class="card__body">
+        <h1 class="card__title">О системе</h1>
+        <p class="card__subtitle">
+          Учебная информационная система для <b>учёта и анализа динамики показателей здоровья спортсменов</b>.
+          Веб-интерфейс реализован на Flask и обеспечивает ввод данных, просмотр журнала и базовые отчёты.
+        </p>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+        <div class="mt-16">
+          <span class="badge">Цель</span>
+          <p class="mt-8">
+            Обеспечить единый журнал измерений (пульс, давление, вес, сон и др.) и быстрый контроль отклонений
+            от индивидуальных/групповых нормативов.
+          </p>
+        </div>
 
-    {% block content %}{% endblock %}
-  </main>
+        <div class="mt-16">
+          <span class="badge">Ключевые сценарии</span>
+          <ul class="mt-8" style="margin:0; padding-left:18px; color: var(--muted);">
+            <li>ведение справочника спортсменов и показателей;</li>
+            <li>внесение измерений с фиксацией даты/времени и источника;</li>
+            <li>фильтрация и поиск по журналу измерений;</li>
+            <li>выявление отклонений от нормы и формирование списка “красной зоны”;</li>
+            <li>создание заметок/обращений по спортсмену (врач/тренер).</li>
+          </ul>
+        </div>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+        <div class="row mt-16">
+          <a class="btn btn--primary" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
+          <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
+        </div>
+      </div>
+    </div>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+    <div class="card">
+      <div class="card__body">
+        <h2 class="card__title">Техническая реализация</h2>
+
+        <div class="mt-12">
+          <span class="badge">Стек</span>
+          <div class="mt-8" style="color: var(--muted);">
+            <div>Backend: Flask</div>
+            <div>База данных: SQLite</div>
+            <div>ORM: SQLAlchemy</div>
+            <div>Auth: Flask-Login</div>
+          </div>
+        </div>
+
+        <div class="mt-16">
+          <span class="badge">Логика контроля</span>
+          <p class="mt-8" style="color: var(--muted); margin:0;">
+            Для каждого показателя могут быть заданы нормативы <b>min/max</b>.
+            Если значение выходит за диапазон — запись попадает в раздел “Отклонения”.
+          </p>
+        </div>
+
+        <div class="mt-16">
+          <span class="badge">Интеграция</span>
+          <p class="mt-8" style="color: var(--muted); margin:0;">
+            Предусмотрена выгрузка измерений в формат CSV для импорта в 1С
+            (ведение журнала/реестра в учётной системе).
+          </p>
+        </div>
+
+        <div class="mt-16">
+          <span class="badge" style="border-color: rgba(212,0,0,0.18); background: var(--red-soft); color: var(--red);">
+            Учебный проект
+          </span>
+          <p class="mt-8" style="color: var(--muted); margin:0;">
+            Система разработана для демонстрации функционала и не предназначена для промышленной эксплуатации.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
