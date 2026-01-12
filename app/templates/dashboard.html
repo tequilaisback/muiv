@@ -1,28 +1,389 @@
-{# app/templates/base.html #}
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Flask Portal{% endblock %}</title>
+{# app/templates/dashboard.html #}
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% block title %}Дашборд — {{ APP_TITLE }}{% endblock %}
 
-  {% include "partials/_nav.html" %}
+{% block content %}
+  <div class="row space-between">
+    <div>
+      <h1 class="card__title" style="margin:0;">Дашборд</h1>
+      <p class="card__subtitle" style="margin:6px 0 0;">
+        Сводка по ключевым данным и быстрый доступ к разделам системы.
+      </p>
+    </div>
+    <div class="row">
+      {% if is_staff %}
+        <a class="btn" href="{{ url_for('routes.catalog') }}">Журнал</a>
+        <a class="btn" href="{{ url_for('routes.offers') }}">Отклонения</a>
+        <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Экспорт в 1С</a>
+      {% elif current_user.is_authenticated %}
+        <a class="btn" href="{{ url_for('cabinet.cabinet_home') }}">Кабинет</a>
+        <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
+        <a class="btn btn--primary" href="{{ url_for('routes.about') }}">О системе</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('routes.about') }}">О системе</a>
+        <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Обращения</a>
+        <a class="btn btn--primary" href="{{ url_for('auth.login') }}">Вход</a>
+      {% endif %}
+    </div>
+  </div>
 
-  <main class="container">
-    {% include "partials/_breadcrumbs.html" %}
-    {% include "partials/_flash.html" %}
+  {% if is_staff %}
+    <div class="grid grid--4 mt-16">
+      <div class="metric">
+        <div class="metric__label">Спортсмены</div>
+        <div class="metric__value">{{ athletes_count }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Показатели</div>
+        <div class="metric__value">{{ indicators_count }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Свежие измерения</div>
+        <div class="metric__value">{{ latest_measurements|length }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Отклонения за 7 дней</div>
+        <div class="metric__value">{{ alerts_recent|length }}</div>
+        <div class="metric__accent"></div>
+      </div>
+    </div>
+  {% else %}
+    <div class="grid grid--2 mt-16">
+      <div class="metric">
+        <div class="metric__label">Спортсмены</div>
+        <div class="metric__value">{{ athletes_count }}</div>
+        <div class="metric__accent"></div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">Показатели</div>
+        <div class="metric__value">{{ indicators_count }}</div>
+        <div class="metric__accent"></div>
+      </div>
+    </div>
+  {% endif %}
 
-    {% block content %}{% endblock %}
-  </main>
+  <div class="card mt-16">
+    <div class="card__body">
+      <h2 class="card__title">Быстрый доступ</h2>
+      <p class="card__subtitle">Основные разделы и действия для ежедневной работы.</p>
 
-  <footer class="footer">
-    <div>Учебный проект на Flask + SQLite · {% if current_user %}Вы вошли как: {{ current_user.full_name }}{% else %}Гость{% endif %}</div>
-  </footer>
+      <div class="grid grid--3 mt-12">
+        {% if is_staff %}
+          <a class="square-card" href="{{ url_for('routes.catalog') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Журнал измерений</p>
+              <p class="square-card__meta">Фильтры, период, отклонения</p>
+            </div>
+          </a>
 
-  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+          <a class="square-card" href="{{ url_for('routes.offers') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Отклонения</p>
+              <p class="square-card__meta">Список “красной зоны”</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('routes.categories') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Показатели и нормы</p>
+              <p class="square-card__meta">Категории, единицы, диапазоны</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('routes.search') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Поиск</p>
+              <p class="square-card__meta">По спортсменам и показателям</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('cabinet.cabinet_home') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Личный кабинет</p>
+              <p class="square-card__meta">Мои измерения и обращения</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('admin.export_1c') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Экспорт в 1С</p>
+              <p class="square-card__meta">CSV с фильтрами по периоду</p>
+            </div>
+          </a>
+        {% elif current_user.is_authenticated %}
+          <a class="square-card" href="{{ url_for('cabinet.cabinet_home') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Личный кабинет</p>
+              <p class="square-card__meta">Мои измерения и обращения</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('feedback.feedback_home') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Обращения</p>
+              <p class="square-card__meta">Форма сообщений и заметок</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('routes.about') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">О системе</p>
+              <p class="square-card__meta">Цели, функционал, интеграции</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('routes.contacts') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Контакты</p>
+              <p class="square-card__meta">Связь с администрацией</p>
+            </div>
+          </a>
+        {% else %}
+          <a class="square-card" href="{{ url_for('routes.about') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">О системе</p>
+              <p class="square-card__meta">Что умеет система мониторинга</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('feedback.feedback_home') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Обращения</p>
+              <p class="square-card__meta">Публичная форма сообщений</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('routes.contacts') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Контакты</p>
+              <p class="square-card__meta">Адреса и контакты проекта</p>
+            </div>
+          </a>
+
+          <a class="square-card" href="{{ url_for('auth.register') }}">
+            <div class="square-card__media"><span aria-hidden="true"></span></div>
+            <div class="square-card__body">
+              <p class="square-card__title">Регистрация</p>
+              <p class="square-card__meta">Создать учётную запись</p>
+            </div>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-16">
+    <div class="card__body">
+      <div class="row space-between">
+        <div>
+          <h2 class="card__title">Экспорт в 1С (CSV)</h2>
+          <p class="card__subtitle">
+            CSV формируется в Python-проекте и далее вручную загружается в 1С.
+          </p>
+        </div>
+        {% if is_staff %}
+          <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Сформировать CSV</a>
+        {% endif %}
+      </div>
+      <div class="row mt-12">
+        <span class="badge">Фильтры по периоду</span>
+        <span class="badge">Выбор спортсмена/показателя</span>
+        <span class="badge">CSV для импорта</span>
+      </div>
+    </div>
+  </div>
+
+  {% if is_staff %}
+    <div class="grid grid--2 mt-16">
+      <div class="card">
+        <div class="card__body">
+          <div class="row space-between">
+            <div>
+              <h2 class="card__title">Последние измерения</h2>
+              <p class="card__subtitle">Последние добавленные записи (до 12).</p>
+            </div>
+            <div class="row">
+              <a class="btn" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
+            </div>
+          </div>
+
+          {% if latest_measurements and latest_measurements|length > 0 %}
+            <table class="table mt-12">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Спортсмен</th>
+                  <th>Показатель</th>
+                  <th>Значение</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in latest_measurements %}
+                  {% set nmin = m.indicator.norm_min %}
+                  {% set nmax = m.indicator.norm_max %}
+                  {% set is_bad = ((nmin is not none and m.value < nmin) or (nmax is not none and m.value > nmax)) %}
+                  <tr>
+                    <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                      <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                      <div style="color: var(--muted); font-size: 12px;">
+                        {{ m.athlete.team.name if m.athlete.team else "Команда: —" }}
+                      </div>
+                    </td>
+                    <td>
+                      <b>{{ m.indicator.name }}</b>
+                      <div style="color: var(--muted); font-size: 12px;">
+                        {{ m.indicator.category.name if m.indicator.category else "Категория: —" }}
+                      </div>
+                    </td>
+                    <td><b>{{ m.value }}</b> {{ m.indicator.unit or "" }}</td>
+                    <td>
+                      {% if is_bad %}
+                        <span class="badge badge--bad">Отклонение</span>
+                      {% else %}
+                        <span class="badge badge--ok">Норма</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="mt-12" style="margin:0; color: var(--muted);">
+              Пока нет измерений. Добавьте первую запись через админку.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__body">
+          <div class="row space-between">
+            <div>
+              <h2 class="card__title">Отклонения (7 дней)</h2>
+              <p class="card__subtitle">Последние предупреждения с фиксацией отклонений.</p>
+            </div>
+            <div class="row">
+              <a class="btn" href="{{ url_for('routes.offers') }}">Все отклонения</a>
+            </div>
+          </div>
+
+          {% if alerts_recent and alerts_recent|length > 0 %}
+            <table class="table mt-12">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Спортсмен</th>
+                  <th>Показатель</th>
+                  <th>Значение</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in alerts_recent %}
+                  {% set m = a.measurement %}
+                  <tr>
+                    <td>
+                      {% if m and m.measured_at %}
+                        {{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if m and m.athlete %}
+                        <a href="{{ url_for('routes.product', athlete_id=m.athlete.id) }}"><b>{{ m.athlete.full_name }}</b></a>
+                        <div style="color: var(--muted); font-size: 12px;">
+                          {{ m.athlete.team.name if m.athlete.team else "Команда: —" }}
+                        </div>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if m and m.indicator %}
+                        <b>{{ m.indicator.name }}</b>
+                        <div style="color: var(--muted); font-size: 12px;">
+                          {{ m.indicator.category.name if m.indicator.category else "Категория: —" }}
+                        </div>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if m %}
+                        <b>{{ m.value }}</b> {{ m.indicator.unit if m.indicator and m.indicator.unit else "" }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>
+                      <div class="row" style="gap:6px;">
+                        {% if a.level == 'low' %}
+                          <span class="badge badge--bad">Ниже нормы</span>
+                        {% elif a.level == 'high' %}
+                          <span class="badge badge--bad">Выше нормы</span>
+                        {% else %}
+                          <span class="badge badge--warn">Отклонение</span>
+                        {% endif %}
+
+                        {% if a.status == 'closed' %}
+                          <span class="badge badge--ok">Закрыто</span>
+                        {% else %}
+                          <span class="badge badge--warn">Открыто</span>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="mt-12" style="margin:0; color: var(--muted);">
+              За последние 7 дней отклонений не найдено.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Доступ сотрудника</h2>
+        <p class="card__subtitle">
+          Журнал, отклонения, поиск и экспорт в 1С доступны сотрудникам (врач/тренер/админ/оператор).
+        </p>
+
+        {% if current_user.is_authenticated %}
+          <div class="row mt-12">
+            <span class="badge">Ваша роль: {{ current_user.role }}</span>
+            <span class="badge">Обратитесь к администратору для расширения доступа</span>
+          </div>
+        {% else %}
+          <div class="row mt-12">
+            <a class="btn btn--primary" href="{{ url_for('auth.login') }}">Войти</a>
+            <a class="btn" href="{{ url_for('auth.register') }}">Регистрация</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
