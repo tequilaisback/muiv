@@ -13,12 +13,33 @@
     </div>
 
     <div class="row">
-      {% if current_user.has_role('admin', 'doctor', 'coach', 'operator') %}
+      {% if is_staff %}
         <a class="btn btn--primary" href="{{ url_for('cabinet.measurement_new') }}">Внести измерение</a>
       {% endif %}
       <a class="btn" href="{{ url_for('feedback.feedback_home') }}">Создать обращение</a>
     </div>
   </div>
+
+  {% if not is_staff %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <h2 class="card__title">Добавление измерений</h2>
+        <p class="card__subtitle">
+          Внесение показателей доступно только сотрудникам (врач/тренер/админ/оператор).
+        </p>
+
+        <div class="mt-16">
+          <span class="badge">Тестовые учётки staff</span>
+          <div class="mt-8" style="color: var(--muted);">
+            <div><b>admin</b> / admin123</div>
+            <div><b>doctor</b> / doctor123</div>
+            <div><b>coach</b> / coach123</div>
+            <div><b>operator</b> / operator123</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   <div class="grid grid--2 mt-16">
     <div class="card">
