@@ -189,26 +189,26 @@
     </div>
   </div>
 
-  <div class="card mt-16">
-    <div class="card__body">
-      <div class="row space-between">
-        <div>
-          <h2 class="card__title">Экспорт в 1С (CSV)</h2>
-          <p class="card__subtitle">
-            CSV формируется в Python-проекте и далее вручную загружается в 1С.
-          </p>
-        </div>
-        {% if is_staff %}
+  {% if is_staff %}
+    <div class="card mt-16">
+      <div class="card__body">
+        <div class="row space-between">
+          <div>
+            <h2 class="card__title">Экспорт в 1С (CSV)</h2>
+            <p class="card__subtitle">
+              CSV формируется в Python-проекте и далее вручную загружается в 1С.
+            </p>
+          </div>
           <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Сформировать CSV</a>
-        {% endif %}
-      </div>
-      <div class="row mt-12">
-        <span class="badge">Фильтры по периоду</span>
-        <span class="badge">Выбор спортсмена/показателя</span>
-        <span class="badge">CSV для импорта</span>
+        </div>
+        <div class="row mt-12">
+          <span class="badge">Фильтры по периоду</span>
+          <span class="badge">Выбор спортсмена/показателя</span>
+          <span class="badge">CSV для импорта</span>
+        </div>
       </div>
     </div>
-  </div>
+  {% endif %}
 
   {% if is_staff %}
     <div class="grid grid--2 mt-16">
@@ -362,27 +362,6 @@
             </p>
           {% endif %}
         </div>
-      </div>
-    </div>
-  {% else %}
-    <div class="card mt-16">
-      <div class="card__body">
-        <h2 class="card__title">Доступ сотрудника</h2>
-        <p class="card__subtitle">
-          Журнал, отклонения, поиск и экспорт в 1С доступны сотрудникам (врач/тренер/админ/оператор).
-        </p>
-
-        {% if current_user.is_authenticated %}
-          <div class="row mt-12">
-            <span class="badge">Ваша роль: {{ current_user.role }}</span>
-            <span class="badge">Обратитесь к администратору для расширения доступа</span>
-          </div>
-        {% else %}
-          <div class="row mt-12">
-            <a class="btn btn--primary" href="{{ url_for('auth.login') }}">Войти</a>
-            <a class="btn" href="{{ url_for('auth.register') }}">Регистрация</a>
-          </div>
-        {% endif %}
       </div>
     </div>
   {% endif %}
