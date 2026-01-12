@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from .auth import staff_required
+from .auth import roles_required, staff_required
 from .db import db, safe_commit
 from .models import (
     ALERT_STATUS_CLOSED,
@@ -14,11 +14,12 @@ from .models import (
     FEEDBACK_KIND_INCIDENT,
     FEEDBACK_KIND_NOTE,
     FEEDBACK_KIND_REQUEST,
+    ROLE_DOCTOR,
     Athlete,
     Feedback,
 )
 from .permissions import get_coach_team_ids, is_coach
-from .utils import crumbs, clamp_int
+from .utils import crumbs, clamp_int, redirect_next
 
 bp = Blueprint("feedback", __name__)
 
@@ -165,6 +166,45 @@ def feedback_create():
 
     flash("Сообщение сохранено.", "success")
     return redirect(url_for("feedback.thanks"))
+
+
+@bp.post("/doctor-note")
+@roles_required(ROLE_DOCTOR)
+def doctor_note_create():
+    """
+    Быстрое примечание врача из журнала.
+    """
+    athlete_id = request.form.get("athlete_id", type=int)
+    title = (request.form.get("title") or "").strip()
+    message = (request.form.get("message") or "").strip()
+
+    if not athlete_id:
+        flash("Выберите спортсмена для примечания.", "warning")
+        return redirect_next("routes.catalog")
+
+    if not title or not message:
+        flash("Заполните тему и текст примечания.", "warning")
+        return redirect_next("routes.catalog")
+
+    athlete = Athlete.query.get(athlete_id)
+    if not athlete:
+        flash("Спортсмен не найден.", "danger")
+        return redirect_next("routes.catalog")
+
+    fb = Feedback(
+        athlete=athlete,
+        author=current_user,
+        kind=FEEDBACK_KIND_NOTE,
+        status=ALERT_STATUS_OPEN,
+        title=title,
+        message=message,
+        created_at=datetime.utcnow(),
+    )
+    db.session.add(fb)
+    safe_commit()
+
+    flash("Примечание врача сохранено.", "success")
+    return redirect_next("routes.catalog")
 
 
 @bp.get("/thanks")
