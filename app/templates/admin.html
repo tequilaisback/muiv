@@ -13,7 +13,9 @@
     </div>
     <div class="row">
       <a class="btn" href="{{ url_for('routes.catalog') }}">Открыть журнал</a>
-      <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Экспорт в 1С (CSV)</a>
+      {% if is_admin %}
+        <a class="btn btn--primary" href="{{ url_for('admin.export_1c') }}">Экспорт в 1С (CSV)</a>
+      {% endif %}
     </div>
   </div>
 
@@ -21,13 +23,20 @@
     <div class="card__body">
       <div class="row" style="gap:8px;">
         <a class="btn {% if active_view=='dashboard' %}btn--primary{% endif %}" href="{{ url_for('admin.dashboard') }}">Сводка</a>
-        <a class="btn {% if active_view in ['measurements'] %}btn--primary{% endif %}" href="{{ url_for('admin.measurements') }}">Измерения</a>
-        <a class="btn {% if active_view in ['athletes','athletes_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.athletes') }}">Спортсмены</a>
-        <a class="btn {% if active_view in ['indicators','indicators_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.indicators') }}">Показатели</a>
-        <a class="btn {% if active_view=='teams' %}btn--primary{% endif %}" href="{{ url_for('admin.teams') }}">Команды</a>
-        <a class="btn {% if active_view=='indicator_categories' %}btn--primary{% endif %}" href="{{ url_for('admin.indicator_categories') }}">Категории</a>
-        <a class="btn {% if active_view=='export_1c' %}btn--primary{% endif %}" href="{{ url_for('admin.export_1c') }}">Экспорт</a>
-        {% if current_user.is_authenticated and current_user.has_role('admin') %}
+
+        {% if is_staff %}
+          <a class="btn {% if active_view in ['measurements'] %}btn--primary{% endif %}" href="{{ url_for('admin.measurements') }}">Измерения</a>
+        {% endif %}
+
+        {% if is_admin or is_operator %}
+          <a class="btn {% if active_view in ['athletes','athletes_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.athletes') }}">Спортсмены</a>
+          <a class="btn {% if active_view in ['indicators','indicators_edit'] %}btn--primary{% endif %}" href="{{ url_for('admin.indicators') }}">Показатели</a>
+          <a class="btn {% if active_view=='teams' %}btn--primary{% endif %}" href="{{ url_for('admin.teams') }}">Команды</a>
+          <a class="btn {% if active_view=='indicator_categories' %}btn--primary{% endif %}" href="{{ url_for('admin.indicator_categories') }}">Категории</a>
+        {% endif %}
+
+        {% if is_admin %}
+          <a class="btn {% if active_view=='export_1c' %}btn--primary{% endif %}" href="{{ url_for('admin.export_1c') }}">Экспорт</a>
           <a class="btn {% if active_view=='users' %}btn--primary{% endif %}" href="{{ url_for('admin.users') }}">Пользователи</a>
         {% endif %}
       </div>
@@ -38,7 +47,7 @@
   {% if active_view == "dashboard" %}
     <div class="grid grid--4 mt-16">
       <div class="metric">
-        <div class="metric__label">Спортсмены</div>
+        <div class="metric__label">{% if is_coach %}Спортсмены команды{% else %}Спортсмены{% endif %}</div>
         <div class="metric__value">{{ stats.athletes }}</div>
         <div class="metric__accent"></div>
       </div>
@@ -59,43 +68,45 @@
       </div>
     </div>
 
-    <div class="card mt-16">
-      <div class="card__body">
-        <h2 class="card__title">Последние выгрузки</h2>
-        <p class="card__subtitle">Журнал экспортов в 1С (CSV).</p>
+    {% if is_admin %}
+      <div class="card mt-16">
+        <div class="card__body">
+          <h2 class="card__title">Последние выгрузки</h2>
+          <p class="card__subtitle">Журнал экспортов в 1С (CSV).</p>
 
-        {% if latest_exports and latest_exports|length > 0 %}
-          <table class="table mt-12">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Период</th>
-                <th>Строк</th>
-                <th>Файл</th>
-                <th>Комментарий</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for x in latest_exports %}
+          {% if latest_exports and latest_exports|length > 0 %}
+            <table class="table mt-12">
+              <thead>
                 <tr>
-                  <td>{{ x.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                  <td>
-                    {% if x.period_from %}{{ x.period_from.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
-                    →
-                    {% if x.period_to %}{{ x.period_to.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
-                  </td>
-                  <td>{{ x.rows_count }}</td>
-                  <td>{{ x.filename or "—" }}</td>
-                  <td>{{ x.comment or "—" }}</td>
+                  <th>Дата</th>
+                  <th>Период</th>
+                  <th>Строк</th>
+                  <th>Файл</th>
+                  <th>Комментарий</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p class="mt-12" style="color: var(--muted); margin:0;">Пока нет экспортов.</p>
-        {% endif %}
+              </thead>
+              <tbody>
+                {% for x in latest_exports %}
+                  <tr>
+                    <td>{{ x.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                      {% if x.period_from %}{{ x.period_from.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                      →
+                      {% if x.period_to %}{{ x.period_to.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                    </td>
+                    <td>{{ x.rows_count }}</td>
+                    <td>{{ x.filename or "—" }}</td>
+                    <td>{{ x.comment or "—" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="mt-12" style="color: var(--muted); margin:0;">Пока нет экспортов.</p>
+          {% endif %}
+        </div>
       </div>
-    </div>
+    {% endif %}
   {% endif %}
 
   {# -------------------- TEAMS -------------------- #}
@@ -323,7 +334,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for a in pagination.items %}
+                  {% for a in pagination["items"] %}
                     <tr>
                       <td>
                         <a href="{{ url_for('routes.product', athlete_id=a.id) }}"><b>{{ a.full_name }}</b></a>
@@ -533,7 +544,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for i in pagination.items %}
+                  {% for i in pagination["items"] %}
                     <tr>
                       <td><b>{{ i.name }}</b><div style="color:var(--muted);font-size:12px;">{{ i.category.name if i.category else "—" }}</div></td>
                       <td>{{ i.unit or "—" }}</td>
@@ -704,53 +715,59 @@
           <div class="card">
             <div class="card__body">
               <h3 class="card__title">Добавить измерение</h3>
-              <form class="form mt-12" method="post" action="{{ url_for('admin.measurements_create') }}">
-                <div class="field">
-                  <label>Спортсмен</label>
-                  <select name="athlete_id" required>
-                    <option value="">—</option>
-                    {% for a in athletes %}
-                      <option value="{{ a.id }}">{{ a.full_name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Показатель</label>
-                  <select name="indicator_id" required>
-                    <option value="">—</option>
-                    {% for i in indicators %}
-                      <option value="{{ i.id }}">{{ i.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="grid grid--2">
+              {% if is_admin or is_coach or is_operator %}
+                <form class="form mt-12" method="post" action="{{ url_for('admin.measurements_create') }}">
                   <div class="field">
-                    <label>Значение</label>
-                    <input class="input" name="value" data-numeric="1" required placeholder="Напр. 62">
-                  </div>
-                  <div class="field">
-                    <label>Дата/время (опц.)</label>
-                    <input class="input" name="measured_at" placeholder="YYYY-MM-DD HH:MM">
-                  </div>
-                </div>
-                <div class="grid grid--2">
-                  <div class="field">
-                    <label>Источник</label>
-                    <select name="source">
-                      {% for s in sources %}
-                        <option value="{{ s }}">{{ s }}</option>
+                    <label>Спортсмен</label>
+                    <select name="athlete_id" required>
+                      <option value="">—</option>
+                      {% for a in athletes %}
+                        <option value="{{ a.id }}">{{ a.full_name }}</option>
                       {% endfor %}
                     </select>
                   </div>
                   <div class="field">
-                    <label>Комментарий</label>
-                    <input class="input" name="comment" placeholder="опционально">
+                    <label>Показатель</label>
+                    <select name="indicator_id" required>
+                      <option value="">—</option>
+                      {% for i in indicators %}
+                        <option value="{{ i.id }}">{{ i.name }}</option>
+                      {% endfor %}
+                    </select>
                   </div>
-                </div>
-                <div class="row">
-                  <button class="btn btn--primary" type="submit">Добавить</button>
-                </div>
-              </form>
+                  <div class="grid grid--2">
+                    <div class="field">
+                      <label>Значение</label>
+                      <input class="input" name="value" data-numeric="1" required placeholder="Напр. 62">
+                    </div>
+                    <div class="field">
+                      <label>Дата/время (опц.)</label>
+                      <input class="input" name="measured_at" placeholder="YYYY-MM-DD HH:MM">
+                    </div>
+                  </div>
+                  <div class="grid grid--2">
+                    <div class="field">
+                      <label>Источник</label>
+                      <select name="source">
+                        {% for s in sources %}
+                          <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Комментарий</label>
+                      <input class="input" name="comment" placeholder="опционально">
+                    </div>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn--primary" type="submit">Добавить</button>
+                  </div>
+                </form>
+              {% else %}
+                <p class="mt-12" style="margin:0; color: var(--muted);">
+                  Добавление измерений доступно только администратору, оператору или тренеру.
+                </p>
+              {% endif %}
             </div>
           </div>
 
@@ -770,7 +787,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for m in pagination.items %}
+                  {% for m in pagination["items"] %}
                     {% set is_bad = (m.indicator and ((m.indicator.norm_min is not none and m.value < m.indicator.norm_min) or (m.indicator.norm_max is not none and m.value > m.indicator.norm_max))) %}
                     <tr>
                       <td>{{ m.measured_at.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -785,9 +802,13 @@
                         {% endif %}
                       </td>
                       <td style="text-align:right;">
-                        <form method="post" action="{{ url_for('admin.measurements_delete', measurement_id=m.id) }}" style="display:inline;">
-                          <button class="btn btn--danger" data-confirm="Удалить измерение?" type="submit">Удалить</button>
-                        </form>
+                        {% if is_admin or is_operator %}
+                          <form method="post" action="{{ url_for('admin.measurements_delete', measurement_id=m.id) }}" style="display:inline;">
+                            <button class="btn btn--danger" data-confirm="Удалить измерение?" type="submit">Удалить</button>
+                          </form>
+                        {% else %}
+                          <span class="badge">—</span>
+                        {% endif %}
                       </td>
                     </tr>
                   {% endfor %}
@@ -976,7 +997,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for u in pagination.items %}
+                  {% for u in pagination["items"] %}
                     <tr>
                       <td><b>{{ u.username }}</b></td>
                       <td>{{ u.email or "—" }}</td>
