@@ -114,6 +114,22 @@ def _get_source_by_code(code: str) -> Optional[MeasureSource]:
     return MeasureSource.query.filter_by(code=code).first()
 
 
+def _collect_team_ids(team_id: Optional[int]) -> list[int]:
+    if not team_id:
+        return []
+    root = Team.query.get(team_id)
+    if not root:
+        return []
+    ids: list[int] = []
+    stack = [root]
+    while stack:
+        team = stack.pop()
+        ids.append(team.id)
+        if team.children:
+            stack.extend(team.children)
+    return ids
+
+
 def _effective_out_of_range_filter(q):
     """
     Фильтр "только вне нормы" с учётом индивидуальных норм (если есть),
@@ -834,13 +850,13 @@ def export_1c():
 @bp.post("/export/1c")
 @admin_required
 def export_1c_post():
-    athlete_id = request.form.get("athlete_id", type=int)
-    indicator_id = request.form.get("indicator_id", type=int)
-    team_id = request.form.get("team_id", type=int)
-    out_only = request.form.get("out") == "1"
+    athlete_id = request.values.get("athlete_id", type=int)
+    indicator_id = request.values.get("indicator_id", type=int)
+    team_id = request.values.get("team_id", type=int)
+    out_only = request.values.get("out") == "1"
 
-    period_from = parse_datetime(request.form.get("from"))
-    period_to = parse_datetime(request.form.get("to"))
+    period_from = parse_datetime(request.values.get("from"))
+    period_to = parse_datetime(request.values.get("to"))
 
     query = (
         Measurement.query
@@ -854,8 +870,9 @@ def export_1c_post():
         query = query.filter(Measurement.athlete_id == athlete_id)
     if indicator_id:
         query = query.filter(Measurement.indicator_id == indicator_id)
-    if team_id:
-        query = query.filter(Athlete.team_id == team_id)
+    team_ids = _collect_team_ids(team_id)
+    if team_ids:
+        query = query.filter(Athlete.team_id.in_(team_ids))
     if period_from:
         query = query.filter(Measurement.measured_at >= period_from)
     if period_to:
@@ -867,7 +884,11 @@ def export_1c_post():
     measurements = query.all()
     rows_count = len(measurements)
 
-    filename = f"export_1c_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    if team_id:
+        filename = f"export_1c_team_{team_id}_{ts}.csv"
+    else:
+        filename = f"export_1c_{ts}.csv"
 
     batch = ExportBatch(
         created_by=current_user if current_user.is_authenticated else None,
